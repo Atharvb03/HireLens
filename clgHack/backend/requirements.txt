@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+pymongo
+python-dotenv
+PyPDF2
+python-docx
+spacy
+scikit-learn>=1.4.0
+numpy>=1.24.0

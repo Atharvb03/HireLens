@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ai_interview_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./ai_interview.db
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      ENVIRONMENT: production
+    depends_on:
+      - postgres
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    command: npx http-server -p 3000 -c-1
+
+volumes:
+  postgres_data:

@@ -1,0 +1,147 @@
+================================================================================
+                            JOHN ANDERSON
+                    Data Analyst & Python Developer
+================================================================================
+
+EMAIL: john.anderson@email.com | PHONE: (555) 123-4567 | LOCATION: Remote
+
+================================================================================
+PROFESSIONAL SUMMARY
+================================================================================
+
+Experienced Data Analyst with 3+ years of expertise in Python programming,
+database management, and data visualization. Proficient in SQL and MySQL for
+data extraction and analysis. Strong problem-solving abilities and excellent
+teamwork skills. Passionate about turning raw data into actionable insights.
+
+================================================================================
+TECHNICAL SKILLS
+================================================================================
+
+PROGRAMMING LANGUAGES:
+• Python (Advanced)
+• SQL (Advanced)
+• JavaScript (Intermediate)
+
+DATABASES & TOOLS:
+• MySQL (Advanced)
+• GitHub (Proficient)
+• MySQL Workbench (Proficient)
+
+DATA ANALYSIS & VISUALIZATION:
+• Pandas (Advanced)
+• NumPy (Advanced)
+• Matplotlib (Intermediate)
+• Seaborn (Intermediate)
+
+MACHINE LEARNING & AI:
+• Scikit-learn (Intermediate)
+• TensorFlow (Basic)
+• Keras (Basic)
+• OpenCV (Basic)
+• NLP (Basic)
+• Machine Learning (ML) (Intermediate)
+• Deep Learning (DL) (Basic)
+
+WEB TECHNOLOGIES:
+• HTML5 (Basic)
+• CSS3 (Basic)
+• React (Basic)
+• Node.js (Basic)
+• Tailwind CSS (Basic)
+
+CLOUD & DEVOPS:
+• AWS Cloud (Basic)
+• MongoDB Compass (Basic)
+
+OTHER TOOLS:
+• Excel (Proficient)
+• VS Code (Proficient)
+
+SOFT SKILLS:
+• Problem Solving (Expert)
+• Teamwork (Expert)
+• Communication (Proficient)
+• Logical Thinking (Proficient)
+• Decision Making (Proficient)
+• Leadership Qualities (Intermediate)
+
+================================================================================
+PROFESSIONAL EXPERIENCE
+================================================================================
+
+DATA ANALYST
+Tech Solutions Inc. | Jan 2022 - Present
+
+• Analyzed large datasets using Python, Pandas, and NumPy to identify trends
+  and patterns, resulting in 25% improvement in business efficiency
+• Created interactive dashboards using Matplotlib and Seaborn for executive
+  reporting and data visualization
+• Optimized SQL queries and MySQL database performance, reducing query time
+  by 40%
+• Collaborated with cross-functional teams to define data requirements and
+  deliver insights
+• Developed Python scripts for automated data extraction and processing
+
+JUNIOR DATA ANALYST
+DataWorks Corporation | Jun 2021 - Dec 2021
+
+• Extracted and analyzed data from MySQL databases using SQL queries
+• Created reports and visualizations using Python and data analysis libraries
+• Assisted in machine learning model development using Scikit-learn
+• Maintained code repositories using GitHub for version control
+• Supported senior analysts in data quality assurance and validation
+
+================================================================================
+EDUCATION
+================================================================================
+
+BACHELOR OF SCIENCE IN COMPUTER SCIENCE
+State University | Graduated: May 2021
+
+Relevant Coursework:
+• Data Structures and Algorithms
+• Database Management Systems
+• Machine Learning Fundamentals
+• Web Development Basics
+• Software Engineering
+
+================================================================================
+PROJECTS
+================================================================================
+
+CUSTOMER SEGMENTATION ANALYSIS
+• Developed Python-based customer segmentation model using Scikit-learn
+• Analyzed 50,000+ customer records using Pandas and NumPy
+• Created visualizations with Matplotlib and Seaborn
+• Identified 5 distinct customer segments for targeted marketing
+
+SALES FORECASTING SYSTEM
+• Built predictive model using TensorFlow and Keras
+• Processed time-series data with Pandas and NumPy
+• Achieved 92% accuracy in sales predictions
+• Deployed model using Python and documented with GitHub
+
+REAL-TIME DATA DASHBOARD
+• Created interactive dashboard using React and Node.js
+• Connected to MySQL database for real-time data updates
+• Styled with Tailwind CSS for responsive design
+• Integrated with AWS Cloud for scalability
+
+================================================================================
+CERTIFICATIONS & TRAINING
+================================================================================
+
+• Python for Data Analysis - Coursera (2021)
+• SQL Database Management - LinkedIn Learning (2021)
+• Machine Learning Specialization - In Progress
+• AWS Cloud Practitioner - Planned
+
+================================================================================
+LANGUAGES
+================================================================================
+
+• English (Fluent)
+• Spanish (Conversational)
+
+================================================================================

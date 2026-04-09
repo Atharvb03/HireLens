@@ -1,0 +1,763 @@
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
+
+export default function CandidateDashboard() {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('jobs')
+  const [candidateData, setCandidateData] = useState(null)
+  const [jobs, setJobs] = useState([])
+  const [applications, setApplications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterSkill, setFilterSkill] = useState('')
+  const [appliedJobs, setAppliedJobs] = useState(new Set())
+  const [showApplicationForm, setShowApplicationForm] = useState(false)
+  const [selectedJobForApplication, setSelectedJobForApplication] = useState(null)
+  const [resumeFile, setResumeFile] = useState(null)
+  const [availability, setAvailability] = useState('immediate')
+  const [noticePeriod, setNoticePeriod] = useState('')
+  const [analysisResult, setAnalysisResult] = useState(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [showBestJobs, setShowBestJobs] = useState(false)
+  const [bestJobs, setBestJobs] = useState([])
+  const [pendingInterviews, setPendingInterviews] = useState([])
+  const [completedInterviews, setCompletedInterviews] = useState([])
+
+  const token = localStorage.getItem('token')
+  const userId = localStorage.getItem('userId')
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/candidate-login')
+      return
+    }
+    fetchCandidateData()
+    fetchJobs()
+    fetchApplications()
+    fetchAIInterviews()
+  }, [token, navigate])
+
+  const fetchCandidateData = async () => {
+    try {
+      const response = await axios.get(`/api/candidates/profile/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setCandidateData(response.data)
+    } catch (error) {
+      console.error('Failed to fetch candidate data:', error)
+    }
+  }
+
+  const fetchJobs = async () => {
+    try {
+      const response = await axios.get('/api/jobs')
+      setJobs(response.data)
+    } catch (error) {
+      console.error('Failed to fetch jobs:', error)
+    }
+  }
+
+  const fetchApplications = async () => {
+    try {
+      const response = await axios.get(`/api/candidates/applications/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setApplications(response.data)
+      const applied = new Set(response.data.map(app => app.jobId?._id || app.jobId))
+      setAppliedJobs(applied)
+      setLoading(false)
+    } catch (error) {
+      console.error('Failed to fetch applications:', error)
+      setLoading(false)
+    }
+  }
+
+  const fetchAIInterviews = async () => {
+    try {
+      const response = await axios.get('/api/ai-interview/candidate/all', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setPendingInterviews(response.data.pending || [])
+      setCompletedInterviews(response.data.completed || [])
+    } catch (error) {
+      console.error('Failed to fetch AI interviews:', error)
+    }
+  }
+
+  const handleApplyClick = (job) => {
+    setSelectedJobForApplication(job)
+    setShowApplicationForm(true)
+    setAnalysisResult(null)
+    setResumeFile(null)
+  }
+
+  // Real-time resume analysis
+  const handleResumeUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setResumeFile(file)
+    setAnalyzing(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('resume', file)
+      formData.append('jobId', selectedJobForApplication._id)
+
+      const response = await axios.post('/api/analysis/analyze-resume-for-job', formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      setAnalysisResult(response.data)
+    } catch (error) {
+      console.error('Failed to analyze resume:', error)
+      alert('Failed to analyze resume: ' + error.response?.data?.error)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  // Find best matching jobs for resume
+  const handleFindBestJobs = async () => {
+    if (!resumeFile) {
+      alert('Please upload a resume first')
+      return
+    }
+
+    setAnalyzing(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('resume', resumeFile)
+
+      const response = await axios.post('/api/analysis/find-best-jobs', formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      setBestJobs(response.data.topJobs)
+      setShowBestJobs(true)
+    } catch (error) {
+      console.error('Failed to find best jobs:', error)
+      alert('Failed to find matching jobs')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const handleApplicationSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!resumeFile) {
+      alert('Please upload a resume')
+      return
+    }
+
+    if (!analysisResult || analysisResult.matchScore < 60) {
+      alert('Match score must be at least 60% to apply')
+      return
+    }
+
+    if (availability === 'notice_period' && !noticePeriod) {
+      alert('Please specify notice period')
+      return
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append('jobId', selectedJobForApplication._id)
+      formData.append('resume', resumeFile)
+      formData.append('availability', availability)
+      if (availability === 'notice_period') {
+        formData.append('noticePeriod', noticePeriod)
+      }
+
+      await axios.post('/api/candidates/apply', formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      alert('Applied successfully!')
+      setAppliedJobs(new Set([...appliedJobs, selectedJobForApplication._id]))
+      setShowApplicationForm(false)
+      setResumeFile(null)
+      setAvailability('immediate')
+      setNoticePeriod('')
+      setAnalysisResult(null)
+      fetchApplications()
+    } catch (error) {
+      alert('Failed to apply: ' + error.response?.data?.error)
+    }
+  }
+
+  const handleDeleteApplication = async (applicationId) => {
+    if (window.confirm('Are you sure you want to delete this application?')) {
+      try {
+        await axios.delete(`/api/candidates/${applicationId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        alert('Application deleted successfully')
+        fetchApplications()
+      } catch (error) {
+        alert('Failed to delete application: ' + error.response?.data?.error)
+      }
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.clear()
+    navigate('/')
+  }
+
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         job.description.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSkill = !filterSkill || job.requiredSkills.some(skill =>
+      skill.toLowerCase().includes(filterSkill.toLowerCase())
+    )
+    return matchesSearch && matchesSkill
+  })
+
+  const getStatusColor = (status) => {
+    const colors = {
+      applied: 'bg-blue-100 text-blue-800',
+      screening: 'bg-yellow-100 text-yellow-800',
+      interviewed: 'bg-purple-100 text-purple-800',
+      rejected: 'bg-red-100 text-red-800',
+      hired: 'bg-green-100 text-green-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getScoreColor = (score) => {
+    if (score >= 80) return 'text-green-400'
+    if (score >= 70) return 'text-blue-400'
+    if (score >= 50) return 'text-yellow-400'
+    return 'text-red-400'
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-300">Loading your dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Header */}
+      <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              HireLens
+            </h1>
+            <p className="text-gray-400 text-sm">Candidate Dashboard</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500 rounded-lg hover:bg-red-500/30 transition"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Profile Card */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">Welcome back!</h2>
+              <p className="text-gray-400">Email: {localStorage.getItem('email')}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-gray-400 text-sm">Applications</p>
+              <p className="text-3xl font-bold text-blue-400">{applications.length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-4 mb-8 border-b border-slate-700">
+          <button
+            onClick={() => setActiveTab('jobs')}
+            className={`px-6 py-3 font-semibold transition border-b-2 ${
+              activeTab === 'jobs'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            Browse Jobs
+          </button>
+          <button
+            onClick={() => setActiveTab('applications')}
+            className={`px-6 py-3 font-semibold transition border-b-2 ${
+              activeTab === 'applications'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            My Applications
+          </button>
+          <button
+            onClick={() => setActiveTab('interviews')}
+            className={`px-6 py-3 font-semibold transition border-b-2 ${
+              activeTab === 'interviews'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            AI Interviews
+          </button>
+        </div>
+
+        {/* Jobs Tab */}
+        {activeTab === 'jobs' && (
+          <div>
+            {/* Search and Filter */}
+            <div className="grid md:grid-cols-2 gap-4 mb-8">
+              <input
+                type="text"
+                placeholder="Search jobs by title or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Filter by skill..."
+                value={filterSkill}
+                onChange={(e) => setFilterSkill(e.target.value)}
+                className="px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Jobs Grid */}
+            <div className="grid md:grid-cols-2 gap-6">
+              {filteredJobs.length > 0 ? (
+                filteredJobs.map(job => (
+                  <div key={job._id} className="bg-slate-800 border border-slate-700 rounded-lg p-6 hover:border-blue-500 transition">
+                    <h3 className="text-xl font-bold text-white mb-2">{job.title}</h3>
+                    <p className="text-gray-400 mb-4 line-clamp-2">{job.description}</p>
+
+                    <div className="space-y-3 mb-4">
+                      <div>
+                        <p className="text-gray-500 text-sm mb-1">Required Skills</p>
+                        <div className="flex flex-wrap gap-2">
+                          {job.requiredSkills?.map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-gray-400 text-sm">📍 {job.location || 'Remote'}</p>
+                      {job.salary && <p className="text-gray-400 text-sm">💰 {job.salary}</p>}
+                    </div>
+
+                    <button
+                      onClick={() => handleApplyClick(job)}
+                      disabled={appliedJobs.has(job._id)}
+                      className={`w-full px-4 py-2 rounded-lg font-semibold transition ${
+                        appliedJobs.has(job._id)
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:shadow-lg'
+                      }`}
+                    >
+                      {appliedJobs.has(job._id) ? 'Already Applied' : 'Apply Now'}
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 text-center py-12">
+                  <p className="text-gray-400">No jobs found matching your criteria</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Applications Tab */}
+        {activeTab === 'applications' && (
+          <div>
+            {applications.length > 0 ? (
+              <div className="space-y-4">
+                {applications.map(app => (
+                  <div key={app._id} className="bg-slate-800 border border-slate-700 rounded-lg p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white">{app.jobId?.title || 'Job'}</h3>
+                        <p className="text-gray-400 text-sm mt-1">{app.jobId?.description?.substring(0, 100)}...</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(app.status)}`}>
+                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteApplication(app._id)}
+                          className="px-3 py-1 bg-red-500/20 text-red-300 border border-red-500 rounded-full text-sm hover:bg-red-500/30 transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="text-gray-500 text-sm">Match Score</p>
+                        <p className={`text-2xl font-bold ${getScoreColor(app.matchScore)}`}>{app.matchScore || 0}%</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-sm">Applied On</p>
+                        <p className="text-white">{new Date(app.appliedAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    {app.interviewScore && (
+                      <div className="grid md:grid-cols-1 gap-4 mb-4">
+                        <div>
+                          <p className="text-gray-500 text-sm">Interview Score</p>
+                          <p className="text-2xl font-bold text-green-400">{app.interviewScore}%</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {app.feedback && (
+                      <div className="bg-slate-700/50 rounded p-3 mb-4">
+                        <p className="text-gray-400 text-sm">Feedback</p>
+                        <p className="text-gray-300">{app.feedback}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-4">You haven't applied to any jobs yet</p>
+                <button
+                  onClick={() => setActiveTab('jobs')}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:shadow-lg transition"
+                >
+                  Browse Jobs
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI Interviews Tab */}
+        {activeTab === 'interviews' && (
+          <div className="space-y-8">
+            {/* Pending Interviews */}
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-6">Pending Interviews</h3>
+              {pendingInterviews.length > 0 ? (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {pendingInterviews.map(interview => (
+                    <div key={interview._id} className="bg-slate-800 border border-slate-700 rounded-lg p-6 hover:border-blue-500 transition">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-bold text-white">{interview.jobId?.title}</h4>
+                          <p className="text-gray-400 text-sm">From: {interview.recruiterId?.name}</p>
+                        </div>
+                        <span className="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-semibold">
+                          Pending
+                        </span>
+                      </div>
+                      <p className="text-gray-400 text-sm mb-4">
+                        Expires: {new Date(interview.expiresAt).toLocaleDateString()}
+                      </p>
+                      <button
+                        onClick={() => navigate(`/interview/${interview.interviewToken}`)}
+                        className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:shadow-lg transition font-semibold"
+                      >
+                        Start Interview
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">No pending interviews</p>
+                </div>
+              )}
+            </div>
+
+            {/* Completed Interviews */}
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-6">Completed Interviews</h3>
+              {completedInterviews.length > 0 ? (
+                <div className="space-y-4">
+                  {completedInterviews.map(interview => (
+                    <div key={interview._id} className="bg-slate-800 border border-slate-700 rounded-lg p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-bold text-white">{interview.jobId?.title}</h4>
+                          <p className="text-gray-400 text-sm">From: {interview.recruiterId?.name}</p>
+                        </div>
+                        <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs font-semibold">
+                          Completed
+                        </span>
+                      </div>
+
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-gray-500 text-sm">Score</p>
+                          <p className="text-2xl font-bold text-green-400">{interview.score}%</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 text-sm">Correct Answers</p>
+                          <p className="text-white font-semibold">{interview.correctAnswers}/{interview.totalQuestions}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 text-sm">Completed On</p>
+                          <p className="text-white text-sm">{new Date(interview.completedAt).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+
+                      {interview.feedback && (
+                        <div className="bg-slate-700/50 rounded p-3 mt-4">
+                          <p className="text-gray-400 text-sm mb-1">Feedback</p>
+                          <p className="text-gray-300">{interview.feedback}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 text-center">
+                  <p className="text-gray-400">No completed interviews</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Application Form Modal with Real-time Analysis */}
+      {showApplicationForm && selectedJobForApplication && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Apply for {selectedJobForApplication.title}</h2>
+              <button
+                onClick={() => {
+                  setShowApplicationForm(false)
+                  setResumeFile(null)
+                  setAvailability('immediate')
+                  setNoticePeriod('')
+                  setAnalysisResult(null)
+                }}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleApplicationSubmit} className="space-y-4">
+              {/* Resume Upload */}
+              <div>
+                <label className="block text-gray-300 font-medium mb-2">Upload Resume *</label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleResumeUpload}
+                  required
+                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {resumeFile && <p className="text-gray-400 text-sm mt-1">Selected: {resumeFile.name}</p>}
+              </div>
+
+              {/* Analysis Results */}
+              {analyzing && (
+                <div className="bg-slate-700 p-4 rounded-lg">
+                  <p className="text-gray-300">Analyzing your resume...</p>
+                </div>
+              )}
+
+              {analysisResult && (
+                <div className="bg-slate-700 p-4 rounded-lg space-y-4">
+                  <div>
+                    <p className="text-gray-400 text-sm mb-2">Match Score</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-slate-600 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            analysisResult.matchScore >= 70 ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${analysisResult.matchScore}%` }}
+                        ></div>
+                      </div>
+                      <p className={`text-lg font-bold ${getScoreColor(analysisResult.matchScore)}`}>
+                        {analysisResult.matchScore}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Matched Skills */}
+                  {analysisResult.matchedSkills.length > 0 && (
+                    <div>
+                      <p className="text-green-400 font-semibold mb-2">✓ Matched Skills ({analysisResult.matchedSkills.length})</p>
+                      <div className="flex flex-wrap gap-2">
+                        {analysisResult.matchedSkills.map((skill, idx) => (
+                          <span key={idx} className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Skill Gaps */}
+                  {analysisResult.missingSkills.length > 0 && (
+                    <div>
+                      <p className="text-red-400 font-semibold mb-2">✗ Skill Gaps ({analysisResult.missingSkills.length})</p>
+                      <div className="space-y-2">
+                        {analysisResult.skillGapSuggestions.map((gap, idx) => (
+                          <div key={idx} className="bg-slate-600 p-2 rounded text-sm">
+                            <p className="text-red-300 font-semibold">{gap.skill}</p>
+                            <p className="text-gray-300">{gap.suggestion}</p>
+                            <p className="text-gray-400 text-xs mt-1">{gap.resources}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Score Warning */}
+                  {analysisResult.matchScore < 60 && (
+                    <div className="bg-red-500/20 border border-red-500 p-3 rounded">
+                      <p className="text-red-300 font-semibold">⚠️ Score Below 60%</p>
+                      <p className="text-red-200 text-sm mt-1">
+                        Your match score is below 60%. Please improve the skills mentioned above to increase your chances.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleFindBestJobs}
+                        disabled={analyzing}
+                        className="mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition"
+                      >
+                        {analyzing ? 'Finding jobs...' : 'Find Better Matching Jobs'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Success Message */}
+                  {analysisResult.matchScore >= 60 && (
+                    <div className="bg-green-500/20 border border-green-500 p-3 rounded">
+                      <p className="text-green-300 font-semibold">✓ Great Match!</p>
+                      <p className="text-green-200 text-sm mt-1">
+                        Your resume matches this job well. You can proceed with your application.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Availability */}
+              <div>
+                <label className="block text-gray-300 font-medium mb-2">Availability *</label>
+                <select
+                  value={availability}
+                  onChange={(e) => setAvailability(e.target.value)}
+                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="immediate">Immediate Joining</option>
+                  <option value="notice_period">Currently on Notice Period</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Notice Period */}
+              {availability === 'notice_period' && (
+                <div>
+                  <label className="block text-gray-300 font-medium mb-2">Notice Period *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 2 weeks, 1 month"
+                    value={noticePeriod}
+                    onChange={(e) => setNoticePeriod(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApplicationForm(false)
+                    setResumeFile(null)
+                    setAvailability('immediate')
+                    setNoticePeriod('')
+                    setAnalysisResult(null)
+                  }}
+                  className="flex-1 px-4 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 transition font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!analysisResult || analysisResult.matchScore < 60 || analyzing}
+                  className={`flex-1 px-4 py-2 rounded-lg transition font-semibold ${
+                    analysisResult && analysisResult.matchScore >= 60
+                      ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:shadow-lg'
+                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  {!analysisResult ? 'Upload Resume First' : analysisResult.matchScore >= 60 ? 'Submit Application' : 'Score Below 60%'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Best Jobs Modal */}
+      {showBestJobs && bestJobs.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-white">Best Matching Jobs</h2>
+              <button
+                onClick={() => setShowBestJobs(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {bestJobs.length > 0 ? (
+              <div className="space-y-3">
+                {bestJobs.map((job, idx) => (
+                  <div key={idx} className="bg-slate-700 border border-slate-600 hover:border-blue-500 p-4 rounded-lg transition">
+                    <p className="text-lg font-semibold text-white">{job.jobTitle}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-400">No matching jobs found</p>
+              </div>
+            )}
+
+            <div className="mt-6 pt-4 border-t border-slate-600">
+              <button
+                onClick={() => setShowBestJobs(false)}
+                className="w-full px-4 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 transition font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

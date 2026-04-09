@@ -1,0 +1,30 @@
+John Doe
+Senior React Developer
+
+SKILLS:
+- React
+- JavaScript
+- Node.js
+- MongoDB
+- Express
+- REST APIs
+- TypeScript
+- CSS
+
+EXPERIENCE:
+- 3 years as React Developer at Tech Company
+- Built multiple React applications with Redux
+- Worked with Node.js backend and Express
+- MongoDB database design and optimization
+- REST API development
+- Team lead for 2 developers
+
+EDUCATION:
+- Bachelor's in Computer Science
+- Completed React Advanced Course
+- Node.js Certification
+
+PROJECTS:
+- E-commerce platform using React and Node.js
+- Real-time chat application with WebSockets
+- Dashboard with data visualization
