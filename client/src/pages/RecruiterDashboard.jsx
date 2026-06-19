@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import ThemeToggle from '../components/ThemeToggle'
+import { useSocket } from '../context/SocketContext'
+import Toast from '../components/Toast'
 
 export default function RecruiterDashboard() {
   const navigate = useNavigate()
+  const { socket, connected } = useSocket()
   const [activeTab, setActiveTab] = useState('jobs')
   const [jobs, setJobs] = useState([])
   const [candidates, setCandidates] = useState([])
@@ -13,6 +17,9 @@ export default function RecruiterDashboard() {
   const [sendingInterview, setSendingInterview] = useState(false)
   const [aiInterviewRankings, setAIInterviewRankings] = useState([])
   const [generatedInterviewLink, setGeneratedInterviewLink] = useState(null)
+  const [notifications, setNotifications] = useState([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [toastNotification, setToastNotification] = useState(null)
 
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
@@ -32,9 +39,81 @@ export default function RecruiterDashboard() {
       navigate('/admin-login')
       return
     }
-    fetchJobs()
-    fetchCandidates()
+
+    // Intercept 401s globally — token expired or invalid
+    const interceptor = axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401) {
+          localStorage.clear()
+          navigate('/admin-login')
+        }
+        return Promise.reject(err)
+      }
+    )
+
+    // Verify token role before loading dashboard
+    axios.get('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => {
+        if (res.data.role !== 'recruiter' && res.data.role !== 'admin') {
+          alert(`Access denied. Your account role is "${res.data.role}". Only recruiter/admin accounts can access this dashboard.`)
+          localStorage.clear()
+          navigate('/admin-login')
+          return
+        }
+        fetchJobs()
+        fetchCandidates()
+      })
+      .catch(() => {
+        localStorage.clear()
+        navigate('/admin-login')
+      })
+
+    return () => axios.interceptors.response.eject(interceptor)
   }, [token, navigate])
+
+  // Socket.io real-time notifications
+  useEffect(() => {
+    if (!socket || !connected) return
+
+    // Join recruiter room
+    socket.emit('join-recruiter-room', { userId })
+
+    // Listen for interview completion events
+    socket.on('interview-completed', (notification) => {
+      console.log('🔔 Interview completed notification:', notification)
+      
+      // Add to notifications list
+      setNotifications(prev => [notification, ...prev])
+      
+      // Show toast notification
+      setToastNotification({
+        title: 'Interview Completed!',
+        body: `${notification.data.candidateName} scored ${notification.data.interviewScore}% for ${notification.data.jobTitle}`,
+        type: notification.data.status === 'hired' ? 'success' : 'error'
+      })
+      
+      // Refresh candidates list to show updated data
+      fetchCandidates()
+      
+      // Show browser notification if permitted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Interview Completed', {
+          body: `${notification.data.candidateName} completed interview for ${notification.data.jobTitle}. Score: ${notification.data.interviewScore}%`,
+          icon: '/favicon.ico'
+        })
+      }
+    })
+
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    return () => {
+      socket.off('interview-completed')
+    }
+  }, [socket, connected, userId])
 
   useEffect(() => {
     // Fetch rankings when candidates tab is active
@@ -62,8 +141,12 @@ export default function RecruiterDashboard() {
       const response = await axios.get('/api/candidates/applications', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      // Sort by match score descending
-      const sorted = response.data.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+      // Sort by combined score (or match score if no interview yet) descending
+      const sorted = response.data.sort((a, b) => {
+        const scoreA = a.combinedScore || a.matchScore || 0
+        const scoreB = b.combinedScore || b.matchScore || 0
+        return scoreB - scoreA
+      })
       setCandidates(sorted)
       setLoading(false)
     } catch (error) {
@@ -83,7 +166,7 @@ export default function RecruiterDashboard() {
       await axios.post('/api/jobs', {
         ...formData,
         vacancies: parseInt(formData.vacancies),
-        requiredSkills: formData.requiredSkills.split(',').map(s => s.trim())
+        requiredSkills: formData.requiredSkills.split(',').map(s => s.trim()).filter(Boolean)
       }, {
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -92,7 +175,17 @@ export default function RecruiterDashboard() {
       setShowJobForm(false)
       fetchJobs()
     } catch (error) {
-      alert('Failed to post job: ' + error.response?.data?.error)
+      const status = error.response?.status
+      const msg = error.response?.data?.error || error.message
+      if (status === 401) {
+        alert('Session expired. Please log in again.')
+        localStorage.clear()
+        navigate('/admin-login')
+      } else if (status === 403) {
+        alert('Access denied. Your account does not have recruiter/admin role.')
+      } else {
+        alert(`Failed to post job (${status}): ${msg}`)
+      }
     }
   }
 
@@ -187,12 +280,100 @@ export default function RecruiterDashboard() {
             </h1>
             <p className="text-gray-400 text-sm">Admin Dashboard</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500 rounded-lg hover:bg-red-500/30 transition"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-2 text-gray-400 hover:text-white transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {notifications.length > 0 && (
+                  <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-96 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
+                  <div className="p-3 border-b border-slate-700 flex justify-between items-center">
+                    <h3 className="font-semibold text-white">Notifications</h3>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={() => setNotifications([])}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-gray-400">
+                      No new notifications
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-700">
+                      {notifications.map((notif, idx) => (
+                        <div key={idx} className="p-4 hover:bg-slate-700/50 transition">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">🎯</span>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-white font-medium">Interview Completed</p>
+                              <p className="text-sm text-gray-300 mt-1">
+                                {notif.data.candidateName} completed interview for {notif.data.jobTitle}
+                              </p>
+                              <div className="flex gap-3 mt-2 text-xs">
+                                <span className={`px-2 py-1 rounded ${
+                                  notif.data.interviewScore >= 70 
+                                    ? 'bg-green-500/20 text-green-300' 
+                                    : 'bg-red-500/20 text-red-300'
+                                }`}>
+                                  Score: {notif.data.interviewScore}%
+                                </span>
+                                <span className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded">
+                                  Combined: {notif.data.combinedScore}%
+                                </span>
+                                <span className={`px-2 py-1 rounded ${
+                                  notif.data.status === 'hired' 
+                                    ? 'bg-green-500/20 text-green-300' 
+                                    : 'bg-red-500/20 text-red-300'
+                                }`}>
+                                  {notif.data.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                {new Date(notif.timestamp).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Socket Connection Status */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-xs text-gray-400">{connected ? 'Live' : 'Offline'}</span>
+            </div>
+
+            <ThemeToggle compact />
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500 rounded-lg hover:bg-red-500/30 transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -417,11 +598,23 @@ export default function RecruiterDashboard() {
                               {candidate.status}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="grid grid-cols-3 gap-2 text-sm">
                             <div>
                               <p className="text-gray-500 text-xs">Match Score</p>
                               <p className="text-blue-300 font-bold">{candidate.matchScore || 0}%</p>
                             </div>
+                            {candidate.interviewScore != null && (
+                              <div>
+                                <p className="text-gray-500 text-xs">Interview Score</p>
+                                <p className="text-purple-300 font-bold">{candidate.interviewScore}%</p>
+                              </div>
+                            )}
+                            {candidate.combinedScore != null && candidate.interviewScore != null && (
+                              <div>
+                                <p className="text-gray-500 text-xs">Combined Score</p>
+                                <p className="text-green-300 font-bold">{candidate.combinedScore}%</p>
+                              </div>
+                            )}
                             <div>
                               <p className="text-gray-500 text-xs">Applied On</p>
                               <p className="text-gray-300 text-xs">{new Date(candidate.appliedAt).toLocaleDateString()}</p>
@@ -524,6 +717,16 @@ export default function RecruiterDashboard() {
           </div>
         )}
       </div>
+
+      {/* Toast Notification */}
+      {toastNotification && (
+        <Toast
+          message={{ title: toastNotification.title, body: toastNotification.body }}
+          type={toastNotification.type}
+          onClose={() => setToastNotification(null)}
+          duration={5000}
+        />
+      )}
     </div>
   )
 }

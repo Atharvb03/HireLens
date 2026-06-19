@@ -5,6 +5,7 @@ import AIInterview from '../models/AIInterview.js'
 import Candidate from '../models/Candidate.js'
 import JobPosting from '../models/JobPosting.js'
 import nodemailer from 'nodemailer'
+import { autoUpdateOnInterviewSent, autoUpdateOnInterviewComplete } from '../services/statusService.js'
 
 const router = express.Router()
 
@@ -56,6 +57,9 @@ router.post('/send-link', authenticate, async (req, res) => {
     // If you want to enable email, uncomment the code below and configure EMAIL_USER and EMAIL_PASSWORD
 
     console.log('=== INTERVIEW LINK SENT ===\n')
+
+    // Auto status: applied/screening → interviewed + send email
+    await autoUpdateOnInterviewSent(candidateId, jobId, interview.interviewLink, interview.expiresAt)
 
     res.json({
       success: true,
@@ -138,6 +142,41 @@ router.post('/update-score', async (req, res) => {
     )
 
     console.log('=== SCORE UPDATED ===\n')
+
+    // Auto status: interviewed → hired/rejected based on score
+    const updatedCandidate = await autoUpdateOnInterviewComplete(
+      interview.candidateId._id,
+      interview.jobId._id,
+      score
+    )
+
+    // Re-rank candidates for this job with updated combined scores
+    const matchingService = (await import('../services/matchingService.js')).default
+    await matchingService.rankCandidatesForJob(interview.jobId._id)
+    console.log('✅ Candidates re-ranked with combined scores')
+
+    // Emit real-time notification to recruiters
+    const io = req.app.get('io')
+    if (io && updatedCandidate) {
+      const notification = {
+        type: 'interview_completed',
+        timestamp: new Date(),
+        data: {
+          candidateId: updatedCandidate._id,
+          candidateName: updatedCandidate.userId?.name,
+          candidateEmail: updatedCandidate.userId?.email,
+          jobId: updatedCandidate.jobId?._id,
+          jobTitle: updatedCandidate.jobId?.title,
+          interviewScore: score,
+          combinedScore: updatedCandidate.combinedScore,
+          status: updatedCandidate.status,
+          matchScore: updatedCandidate.matchScore
+        }
+      }
+      
+      io.to('recruiters').emit('interview-completed', notification)
+      console.log('🔔 Real-time notification sent to recruiters')
+    }
 
     res.json({
       success: true,

@@ -3,24 +3,215 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Dark theme (default) ── */
+  :root {
+    --bg-base:      #060B18;
+    --bg-surface:   #0A1020;
+    --bg-elevated:  #0F1A2E;
+    --border:       rgba(255,255,255,0.08);
+    --text-primary: #e2e8f0;
+    --text-muted:   #64748b;
+    --text-subtle:  #334155;
+  }
+
+  /* ── Light theme ── */
+  html.light {
+    --bg-base:      #f1f5f9;
+    --bg-surface:   #ffffff;
+    --bg-elevated:  #f8fafc;
+    --border:       rgba(0,0,0,0.08);
+    --text-primary: #0f172a;
+    --text-muted:   #64748b;
+    --text-subtle:  #94a3b8;
+  }
+
   body {
     @apply font-sans antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
+
+  /* Light mode overrides for slate-* utility classes used throughout */
+  html.light .bg-slate-900,
+  html.light .bg-\[\#060B18\],
+  html.light .bg-\[\#040810\] { background-color: #f1f5f9 !important; }
+
+  html.light .bg-slate-800,
+  html.light .bg-\[\#0A1020\] { background-color: #ffffff !important; }
+
+  html.light .bg-slate-700 { background-color: #f1f5f9 !important; }
+  html.light .bg-slate-700\/50 { background-color: rgba(241,245,249,0.8) !important; }
+  html.light .bg-slate-700\/40 { background-color: rgba(241,245,249,0.7) !important; }
+
+  html.light .border-slate-700 { border-color: #e2e8f0 !important; }
+  html.light .border-slate-600 { border-color: #cbd5e1 !important; }
+  html.light .border-white\/5  { border-color: rgba(0,0,0,0.06) !important; }
+  html.light .border-white\/8  { border-color: rgba(0,0,0,0.08) !important; }
+  html.light .border-white\/10 { border-color: rgba(0,0,0,0.10) !important; }
+
+  html.light .text-white  { color: #0f172a !important; }
+  html.light .text-slate-300 { color: #334155 !important; }
+  html.light .text-slate-400 { color: #64748b !important; }
+  html.light .text-slate-500 { color: #94a3b8 !important; }
+  html.light .text-gray-300  { color: #374151 !important; }
+  html.light .text-gray-400  { color: #6b7280 !important; }
+
+  html.light .placeholder-slate-500::placeholder { color: #94a3b8; }
+  html.light .placeholder-gray-500::placeholder  { color: #9ca3af; }
+
+  html.light input,
+  html.light textarea,
+  html.light select {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  html.light .bg-white\/4,
+  html.light .bg-white\/5,
+  html.light .bg-white\/3 { background-color: rgba(0,0,0,0.03) !important; }
+
+  html.light .bg-white\/8 { background-color: rgba(0,0,0,0.05) !important; }
+
+  /* Gradient backgrounds in light mode */
+  html.light .bg-gradient-to-br.from-slate-900 { background: linear-gradient(135deg, #f1f5f9, #e2e8f0) !important; }
+  html.light .bg-gradient-to-br.from-slate-900.via-slate-800 { background: linear-gradient(135deg, #f1f5f9, #ffffff, #f1f5f9) !important; }
 }
 
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 0.6s ease-in;
   }
-  
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(99, 179, 237, 0.15);
+  }
+
+  .glow-blue {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.25), 0 0 60px rgba(59, 130, 246, 0.1);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.25), 0 0 60px rgba(139, 92, 246, 0.1);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.2), 0 0 60px rgba(34, 211, 238, 0.08);
+  }
+
+  .text-gradient {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-violet-400;
+  }
+
+  .btn-primary {
+    @apply px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl font-semibold transition-all duration-300;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+
+  .btn-primary:hover {
+    @apply from-blue-500 to-violet-500 -translate-y-1;
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+  }
+
+  .btn-ghost {
+    @apply px-8 py-4 rounded-xl font-semibold transition-all duration-300 border border-white/10;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+  }
+
+  .btn-ghost:hover {
+    @apply -translate-y-1 border-blue-500/40;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .section-dark {
+    background: #060B18;
+  }
+
+  .section-darker {
+    background: #040810;
+  }
+
+  .node-bg {
+    background-image: radial-gradient(circle, rgba(59, 130, 246, 0.08) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(59, 130, 246, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59, 130, 246, 0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-16px); }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(120px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(120px) rotate(-360deg); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-float-slow { animation: floatSlow 8s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Toast notification animations */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
 }

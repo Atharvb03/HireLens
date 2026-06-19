@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import OpenAI from 'openai'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -66,6 +67,58 @@ function initializeGeminiAPI() {
 // Initialize on module load
 initializeGeminiAPI()
 
+// Model fallback chain — tries Gemini models, then OpenAI
+const GEMINI_MODELS = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-2.5-flash']
+let _openai = null
+
+function getOpenAI() {
+  if (_openai) return _openai
+  const key = process.env.OPENAI_API_KEY
+  if (!key) return null
+  _openai = new OpenAI({ apiKey: key })
+  return _openai
+}
+
+async function generateWithFallback(prompt) {
+  // Try Gemini first
+  if (genAI) {
+    for (const modelName of GEMINI_MODELS) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName })
+        const result = await model.generateContent(prompt)
+        console.log(`✅ Interview model used: ${modelName}`)
+        return result.response.text()
+      } catch (err) {
+        const skip = err.message?.includes('429') || err.message?.includes('quota') ||
+                     err.message?.includes('404') || err.message?.includes('not found')
+        if (skip) { console.warn(`⚠️  ${modelName} skipped: ${err.message?.split('\n')[0]}`); continue }
+        throw err
+      }
+    }
+    console.warn('⚠️  All Gemini models exhausted — trying OpenAI fallback')
+  }
+
+  // OpenAI fallback
+  const openai = getOpenAI()
+  if (openai) {
+    try {
+      console.log('🔄 Trying OpenAI gpt-4o-mini for interview...')
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+      })
+      console.log('✅ OpenAI gpt-4o-mini succeeded')
+      return response.choices[0].message.content?.trim()
+    } catch (err) {
+      console.error('❌ OpenAI fallback failed:', err.message)
+    }
+  }
+
+  console.error('❌ All AI providers exhausted for interview service')
+  return null
+}
+
 /**
  * Generate interview questions using Gemini API
  */
@@ -83,7 +136,6 @@ export async function generateInterviewQuestions({ jobRole, jobDescription, requ
     }
 
     console.log('🔄 Attempting to generate questions with Gemini API...')
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Add randomization to ensure different questions each time
     const randomSeed = Math.random().toString(36).substring(7)
@@ -127,8 +179,8 @@ Return the response as a JSON array with this format:
 
 Only return the JSON array, no other text.`
 
-    const result = await model.generateContent(prompt)
-    const responseText = result.response.text()
+    const responseText = await generateWithFallback(prompt)
+    if (!responseText) return generateFallbackQuestions(jobRole)
 
     console.log('✅ Gemini API response received')
 
@@ -154,103 +206,65 @@ Only return the JSON array, no other text.`
 }
 
 /**
- * Generate fallback questions when Gemini API fails
- * Generates varied questions by shuffling and selecting random ones
+ * Generate fallback questions — 20 role categories, 12 questions each
  */
 function generateFallbackQuestions(jobRole) {
-  // Extended domain-specific fallback questions based on job role (10+ per role)
-  const questionsByRole = {
-    'frontend': [
-      { question: 'Explain the difference between state and props in React', type: 'descriptive', difficulty: 'easy' },
-      { question: 'How would you optimize a slow-rendering React component?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your approach to responsive web design', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What is the CSS box model and how does it work?', type: 'short_answer', difficulty: 'easy' },
-      { question: 'How do you handle asynchronous operations in JavaScript?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What are React hooks and how do they improve component logic?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Explain the concept of virtual DOM and its benefits', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How would you implement lazy loading for images in a web application?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What is the difference between controlled and uncontrolled components?', type: 'short_answer', difficulty: 'medium' },
-      { question: 'Describe your approach to testing React components', type: 'descriptive', difficulty: 'hard' },
-      { question: 'How do you handle state management in large applications?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What are the best practices for CSS organization?', type: 'descriptive', difficulty: 'medium' }
-    ],
-    'backend': [
-      { question: 'Explain the difference between SQL and NoSQL databases', type: 'descriptive', difficulty: 'easy' },
-      { question: 'How would you design a scalable REST API?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What is the purpose of database indexing?', type: 'short_answer', difficulty: 'medium' },
-      { question: 'Describe your approach to handling authentication and authorization', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you ensure data consistency in distributed systems?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What are microservices and what are their advantages?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How would you implement caching in a backend system?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Explain the concept of database transactions and ACID properties', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you handle API rate limiting and throttling?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your approach to error handling and logging', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What is your experience with message queues?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'How do you optimize database queries?', type: 'descriptive', difficulty: 'hard' }
-    ],
-    'fullstack': [
-      { question: 'Explain the MVC architecture pattern', type: 'descriptive', difficulty: 'easy' },
-      { question: 'How would you optimize both frontend and backend performance?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Describe your approach to API design and documentation', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What security measures do you implement in web applications?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you handle real-time data synchronization between client and server?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What is your approach to database schema design?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How would you implement user authentication and session management?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Describe your approach to handling file uploads and storage', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you ensure code quality and maintainability?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What is your experience with deployment and DevOps practices?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you handle testing across frontend and backend?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Describe your approach to monitoring and debugging production issues', type: 'descriptive', difficulty: 'hard' }
-    ],
-    'devops': [
-      { question: 'Explain containerization and Docker', type: 'descriptive', difficulty: 'easy' },
-      { question: 'How would you design a CI/CD pipeline?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What monitoring and logging strategies do you use?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your approach to infrastructure as code', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you handle disaster recovery and backup strategies?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'What is Kubernetes and how does it manage containerized applications?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'How would you implement auto-scaling for applications?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Describe your approach to security in cloud infrastructure', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you manage secrets and sensitive data in production?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What is your experience with different cloud providers?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you optimize cloud costs?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your approach to load balancing and traffic management', type: 'descriptive', difficulty: 'hard' }
-    ],
-    'data-science': [
-      { question: 'Explain the difference between supervised and unsupervised learning', type: 'descriptive', difficulty: 'easy' },
-      { question: 'How do you handle missing data in a dataset?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your approach to feature engineering', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What metrics do you use to evaluate model performance?', type: 'short_answer', difficulty: 'medium' },
-      { question: 'How would you approach a complex machine learning problem?', type: 'descriptive', difficulty: 'hard' },
-      { question: 'Explain the bias-variance tradeoff in machine learning', type: 'descriptive', difficulty: 'hard' },
-      { question: 'How do you prevent overfitting in machine learning models?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your experience with deep learning frameworks', type: 'descriptive', difficulty: 'hard' },
-      { question: 'How would you handle imbalanced datasets?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'What is your approach to model deployment and monitoring?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'How do you perform exploratory data analysis?', type: 'descriptive', difficulty: 'medium' },
-      { question: 'Describe your experience with data visualization tools', type: 'descriptive', difficulty: 'medium' }
-    ]
+  const q = (question, type, difficulty) => ({ question, type, difficulty })
+  const bank = {
+    'frontend':        [ q('Explain the difference between state and props in React','descriptive','easy'), q('How would you optimize a slow-rendering React component?','descriptive','medium'), q('Describe your approach to responsive web design','descriptive','medium'), q('What is the CSS box model and how does it work?','short_answer','easy'), q('How do you handle asynchronous operations in JavaScript?','descriptive','hard'), q('What are React hooks and how do they improve component logic?','descriptive','medium'), q('Explain the concept of virtual DOM and its benefits','descriptive','medium'), q('How would you implement lazy loading for images?','descriptive','hard'), q('What is the difference between controlled and uncontrolled components?','short_answer','medium'), q('Describe your approach to testing React components','descriptive','hard'), q('How do you handle state management in large applications?','descriptive','hard'), q('What are the best practices for CSS organization and naming conventions?','descriptive','medium') ],
+    'backend':         [ q('Explain the difference between SQL and NoSQL databases','descriptive','easy'), q('How would you design a scalable REST API?','descriptive','hard'), q('What is the purpose of database indexing and when would you use it?','short_answer','medium'), q('Describe your approach to handling authentication and authorization','descriptive','medium'), q('How do you ensure data consistency in distributed systems?','descriptive','hard'), q('What are microservices and their advantages over monoliths?','descriptive','medium'), q('How would you implement caching in a backend system?','descriptive','hard'), q('Explain database transactions and ACID properties','descriptive','medium'), q('How do you handle API rate limiting and throttling?','descriptive','medium'), q('Describe your approach to error handling and structured logging','descriptive','medium'), q('What is your experience with message queues like RabbitMQ or Kafka?','descriptive','hard'), q('How do you optimize slow database queries?','descriptive','hard') ],
+    'fullstack':       [ q('Explain the MVC architecture pattern and its benefits','descriptive','easy'), q('How would you optimize both frontend and backend performance?','descriptive','hard'), q('Describe your approach to API design and documentation','descriptive','medium'), q('What security measures do you implement in web applications?','descriptive','medium'), q('How do you handle real-time data synchronization between client and server?','descriptive','hard'), q('What is your approach to database schema design?','descriptive','medium'), q('How would you implement user authentication and session management?','descriptive','hard'), q('Describe your approach to handling file uploads and cloud storage','descriptive','medium'), q('How do you ensure code quality and maintainability across the stack?','descriptive','medium'), q('What is your experience with deployment and DevOps practices?','descriptive','medium'), q('How do you handle testing across frontend and backend?','descriptive','hard'), q('Describe your approach to monitoring and debugging production issues','descriptive','hard') ],
+    'devops':          [ q('Explain containerization and the benefits of Docker','descriptive','easy'), q('How would you design a CI/CD pipeline from scratch?','descriptive','hard'), q('What monitoring and logging strategies do you use in production?','descriptive','medium'), q('Describe your approach to infrastructure as code using Terraform or Ansible','descriptive','medium'), q('How do you handle disaster recovery and backup strategies?','descriptive','hard'), q('What is Kubernetes and how does it manage containerized applications?','descriptive','hard'), q('How would you implement auto-scaling for a high-traffic application?','descriptive','hard'), q('Describe your approach to security in cloud infrastructure','descriptive','medium'), q('How do you manage secrets and sensitive data in production?','descriptive','medium'), q('What is your experience with AWS, Azure, or GCP?','descriptive','medium'), q('How do you optimize cloud infrastructure costs?','descriptive','medium'), q('Describe your approach to load balancing and traffic management','descriptive','hard') ],
+    'data-science':    [ q('Explain the difference between supervised and unsupervised learning','descriptive','easy'), q('How do you handle missing data in a dataset?','descriptive','medium'), q('Describe your approach to feature engineering and selection','descriptive','medium'), q('What metrics do you use to evaluate classification vs regression models?','short_answer','medium'), q('How would you approach a complex machine learning problem end-to-end?','descriptive','hard'), q('Explain the bias-variance tradeoff in machine learning','descriptive','hard'), q('How do you prevent overfitting in machine learning models?','descriptive','medium'), q('Describe your experience with TensorFlow or PyTorch','descriptive','hard'), q('How would you handle imbalanced datasets?','descriptive','medium'), q('What is your approach to model deployment and monitoring?','descriptive','medium'), q('How do you perform exploratory data analysis on a new dataset?','descriptive','medium'), q('Describe your experience with data visualization tools','descriptive','medium') ],
+    'ai-ml':           [ q('Explain the difference between a neural network and a traditional ML algorithm','descriptive','easy'), q('How do you choose between different ML algorithms for a given problem?','descriptive','medium'), q('Describe the architecture of a transformer model and its key components','descriptive','hard'), q('What is transfer learning and when would you use it?','descriptive','medium'), q('How do you evaluate and compare different ML models?','descriptive','medium'), q('Explain gradient descent and its variants (SGD, Adam, RMSProp)','descriptive','hard'), q('How do you handle overfitting in deep learning models?','descriptive','medium'), q('What is your experience with MLOps and model deployment pipelines?','descriptive','hard'), q('Describe how you would build a recommendation system','descriptive','hard'), q('What are embeddings and how are they used in NLP and recommendation systems?','descriptive','medium'), q('How do you approach hyperparameter tuning?','descriptive','medium'), q('Explain the concept of attention mechanism in deep learning','descriptive','hard') ],
+    'computer-vision': [ q('Explain how a Convolutional Neural Network (CNN) works','descriptive','easy'), q('What is the difference between object detection and image segmentation?','short_answer','medium'), q('Describe the YOLO architecture and its advantages for real-time detection','descriptive','hard'), q('How do you handle class imbalance in image classification datasets?','descriptive','medium'), q('What data augmentation techniques do you use for image datasets?','descriptive','medium'), q('Explain the concept of transfer learning in computer vision','descriptive','medium'), q('How would you build a real-time object detection system?','descriptive','hard'), q('What is the role of anchor boxes in object detection models?','descriptive','hard'), q('Describe your experience with OpenCV and image preprocessing','descriptive','medium'), q('How do you evaluate the performance of a computer vision model?','descriptive','medium'), q('What is semantic segmentation vs instance segmentation?','descriptive','hard'), q('How would you deploy a computer vision model on edge devices?','descriptive','hard') ],
+    'nlp':             [ q('Explain the difference between stemming and lemmatization','short_answer','easy'), q('What is TF-IDF and how is it used in text analysis?','descriptive','medium'), q('Describe the architecture of BERT and how it differs from GPT','descriptive','hard'), q('How do you handle out-of-vocabulary words in NLP models?','descriptive','medium'), q('What is named entity recognition and how would you build an NER system?','descriptive','medium'), q('Explain the concept of word embeddings (Word2Vec, GloVe, FastText)','descriptive','medium'), q('How would you build a text classification pipeline?','descriptive','medium'), q('What is the attention mechanism and why is it important in NLP?','descriptive','hard'), q('How do you evaluate the quality of a language model?','descriptive','medium'), q('Describe your approach to fine-tuning a pre-trained language model','descriptive','hard'), q('What are the challenges of multilingual NLP?','descriptive','hard'), q('How would you build a question-answering system?','descriptive','hard') ],
+    'cybersecurity':   [ q('Explain the difference between symmetric and asymmetric encryption','descriptive','easy'), q('What is the OWASP Top 10 and why is it important?','short_answer','medium'), q('Describe how SQL injection attacks work and how to prevent them','descriptive','medium'), q('What is a man-in-the-middle attack and how do you defend against it?','descriptive','medium'), q('Explain the concept of zero-trust security architecture','descriptive','hard'), q('How do you perform a penetration test on a web application?','descriptive','hard'), q('What is the difference between IDS and IPS systems?','short_answer','medium'), q('Describe your approach to incident response when a breach is detected','descriptive','hard'), q('What is cross-site scripting (XSS) and how do you prevent it?','descriptive','medium'), q('How do you implement secure authentication and session management?','descriptive','medium'), q('Explain the concept of threat modeling','descriptive','hard'), q('What tools do you use for vulnerability scanning and security auditing?','descriptive','medium') ],
+    'cloud':           [ q('Explain the difference between IaaS, PaaS, and SaaS','descriptive','easy'), q('How would you design a highly available and fault-tolerant cloud architecture?','descriptive','hard'), q('What is the difference between horizontal and vertical scaling?','short_answer','easy'), q('Describe your experience with AWS services (EC2, S3, RDS, Lambda)','descriptive','medium'), q('How do you implement a serverless architecture?','descriptive','medium'), q('What is a VPC and how do you configure network security in the cloud?','descriptive','medium'), q('How do you manage cloud costs and optimize resource utilization?','descriptive','medium'), q('Describe your approach to cloud security and compliance','descriptive','hard'), q('What is a CDN and when would you use one?','short_answer','easy'), q('How do you implement disaster recovery in a cloud environment?','descriptive','hard'), q('Explain the concept of cloud-native application design','descriptive','hard'), q('How do you monitor and observe cloud infrastructure?','descriptive','medium') ],
+    'testing':         [ q('Explain the difference between unit, integration, and end-to-end testing','descriptive','easy'), q('What is the test pyramid and how does it guide your testing strategy?','descriptive','medium'), q('How do you write effective unit tests for complex business logic?','descriptive','medium'), q('Describe your experience with test automation frameworks','descriptive','medium'), q('What is mocking and when should you use it in tests?','descriptive','medium'), q('How do you approach testing a REST API?','descriptive','medium'), q('What is regression testing and how do you manage it?','descriptive','easy'), q('Describe your approach to performance and load testing','descriptive','hard'), q('How do you measure and improve test coverage?','descriptive','medium'), q('What is behavior-driven development (BDD) and how does it work?','descriptive','medium'), q('How do you handle flaky tests in a CI/CD pipeline?','descriptive','hard'), q('Describe your experience with Selenium, Cypress, or Playwright','descriptive','medium') ],
+    'sdet':            [ q('What is the difference between a QA Engineer and an SDET?','short_answer','easy'), q('How do you design a test automation framework from scratch?','descriptive','hard'), q('Describe your experience with Selenium WebDriver and Page Object Model','descriptive','medium'), q('How do you integrate automated tests into a CI/CD pipeline?','descriptive','hard'), q('What is API testing and how do you automate it?','descriptive','medium'), q('How do you handle dynamic elements and waits in UI automation?','descriptive','medium'), q('Describe your approach to performance testing with JMeter or Gatling','descriptive','hard'), q('How do you prioritize which test cases to automate?','descriptive','medium'), q('What is contract testing and when would you use it?','descriptive','hard'), q('How do you debug and maintain a large test automation suite?','descriptive','medium'), q('Describe your experience with mobile test automation (Appium)','descriptive','medium'), q('How do you report and track test results and defects?','descriptive','easy') ],
+    'game-dev':        [ q('Explain the game loop and how it manages update and render cycles','descriptive','easy'), q('What is the difference between component-based and inheritance-based game architecture?','descriptive','medium'), q('How do you optimize game performance for low-end devices?','descriptive','hard'), q('Describe your experience with Unity or Unreal Engine','descriptive','medium'), q('What is a physics engine and how does collision detection work?','descriptive','medium'), q('How do you implement pathfinding algorithms like A* in a game?','coding','hard'), q('What is the difference between 2D and 3D rendering pipelines?','descriptive','medium'), q('How do you handle game state management and save systems?','descriptive','medium'), q('Describe your approach to multiplayer networking in games','descriptive','hard'), q('What is shader programming and when would you write custom shaders?','descriptive','hard'), q('How do you implement an animation state machine?','descriptive','medium'), q('What are the common causes of memory leaks in game development?','descriptive','hard') ],
+    'mobile':          [ q('Explain the difference between native, hybrid, and cross-platform mobile development','descriptive','easy'), q('How do you manage state in a React Native or Flutter application?','descriptive','medium'), q('What are the key differences between iOS and Android development?','descriptive','medium'), q('How do you optimize mobile app performance and reduce battery usage?','descriptive','hard'), q('Describe your approach to handling offline functionality in mobile apps','descriptive','hard'), q('What is the mobile app lifecycle and how do you handle background tasks?','descriptive','medium'), q('How do you implement push notifications in a mobile application?','descriptive','medium'), q('Describe your experience with mobile app security best practices','descriptive','hard'), q('How do you handle different screen sizes and orientations?','descriptive','medium'), q('What is your approach to mobile app testing and debugging?','descriptive','medium'), q('How do you publish an app to the App Store and Google Play?','descriptive','easy'), q('Describe your experience with mobile CI/CD pipelines','descriptive','hard') ],
+    'system-design':   [ q('How would you design a URL shortening service like bit.ly?','descriptive','medium'), q('Explain the CAP theorem and its implications for distributed systems','descriptive','hard'), q('How would you design a distributed cache system?','descriptive','hard'), q('What is consistent hashing and when is it used?','descriptive','hard'), q('How would you design a real-time chat application at scale?','descriptive','hard'), q('Explain the difference between SQL and NoSQL and when to choose each','descriptive','medium'), q('How would you design a notification system for millions of users?','descriptive','hard'), q('What is a message queue and how does it improve system reliability?','descriptive','medium'), q('How do you design for high availability and fault tolerance?','descriptive','hard'), q('Explain database sharding and its trade-offs','descriptive','hard'), q('How would you design a rate limiter?','descriptive','medium'), q('What is event-driven architecture and when would you use it?','descriptive','medium') ],
+    'embedded':        [ q('Explain the difference between microcontrollers and microprocessors','short_answer','easy'), q('What is RTOS and when would you use it over a bare-metal approach?','descriptive','medium'), q('How do you handle interrupt service routines (ISRs) safely?','descriptive','medium'), q('Describe your experience with communication protocols (I2C, SPI, UART)','descriptive','medium'), q('How do you debug embedded systems without a traditional debugger?','descriptive','hard'), q('What is memory-mapped I/O and how does it work?','descriptive','medium'), q('How do you optimize code for memory-constrained embedded systems?','descriptive','hard'), q('Explain the concept of watchdog timers and their importance','descriptive','medium'), q('How do you implement power management in battery-powered devices?','descriptive','hard'), q('What is DMA and when would you use it?','short_answer','medium'), q('Describe your experience with bootloaders and firmware updates','descriptive','hard'), q('How do you ensure real-time performance in embedded systems?','descriptive','hard') ],
+    'robotics':        [ q('Explain the difference between forward and inverse kinematics','descriptive','medium'), q('What is ROS (Robot Operating System) and how does it work?','descriptive','medium'), q('How do you implement PID control for a robotic system?','descriptive','hard'), q('Describe your experience with SLAM (Simultaneous Localization and Mapping)','descriptive','hard'), q('What is the difference between reactive and deliberative robot architectures?','descriptive','medium'), q('How do you handle sensor fusion from multiple sources (LiDAR, camera, IMU)?','descriptive','hard'), q('Explain the concept of motion planning algorithms (RRT, A*)','descriptive','hard'), q('How do you ensure safety in human-robot interaction?','descriptive','medium'), q('Describe your experience with robot simulation environments (Gazebo, Webots)','descriptive','medium'), q('What is a Kalman filter and how is it used in robotics?','descriptive','hard'), q('How do you test and validate robotic software?','descriptive','medium'), q('Describe the challenges of deploying robots in unstructured environments','descriptive','hard') ],
+    'bi':              [ q('Explain the difference between OLTP and OLAP systems','descriptive','easy'), q('What is a data warehouse and how does it differ from a data lake?','descriptive','medium'), q('Describe your experience with BI tools like Power BI, Tableau, or Looker','descriptive','medium'), q('How do you design an effective dashboard for business stakeholders?','descriptive','medium'), q('What is a star schema and how does it differ from a snowflake schema?','descriptive','medium'), q('How do you ensure data quality and consistency in a BI pipeline?','descriptive','hard'), q('Describe your experience with ETL/ELT processes','descriptive','medium'), q('How do you optimize slow SQL queries in a data warehouse?','descriptive','hard'), q('What are KPIs and how do you define them with business stakeholders?','descriptive','medium'), q('How do you handle slowly changing dimensions (SCD) in a data warehouse?','descriptive','hard'), q('Describe your experience with dbt or similar data transformation tools','descriptive','medium'), q('How do you present complex data insights to non-technical audiences?','descriptive','medium') ],
+    'blockchain':      [ q('Explain how blockchain achieves consensus without a central authority','descriptive','easy'), q('What is the difference between Proof of Work and Proof of Stake?','descriptive','medium'), q('How do smart contracts work and what are their limitations?','descriptive','medium'), q('Describe your experience with Solidity and Ethereum development','descriptive','medium'), q('What is a gas fee and how does it affect smart contract design?','descriptive','medium'), q('How do you test and audit smart contracts for security vulnerabilities?','descriptive','hard'), q('What is a reentrancy attack and how do you prevent it?','descriptive','hard'), q('Explain the concept of DeFi and how liquidity pools work','descriptive','hard'), q('How do you handle upgradeable smart contracts?','descriptive','hard'), q('What is IPFS and how is it used in decentralized applications?','descriptive','medium'), q('Describe the differences between Layer 1 and Layer 2 blockchain solutions','descriptive','hard'), q('How do you integrate a blockchain backend with a traditional web frontend?','descriptive','medium') ],
+    'uiux':            [ q('Explain the difference between UX and UI design','short_answer','easy'), q('What is your design process from research to final deliverable?','descriptive','medium'), q('How do you conduct user research and usability testing?','descriptive','medium'), q('Describe your experience with Figma, Sketch, or Adobe XD','descriptive','medium'), q('What is a design system and why is it important?','descriptive','medium'), q('How do you design for accessibility (WCAG guidelines)?','descriptive','medium'), q('Explain the concept of information architecture and how you apply it','descriptive','medium'), q('How do you handle conflicting feedback from stakeholders and users?','descriptive','hard'), q('What is the difference between wireframes, mockups, and prototypes?','short_answer','easy'), q('How do you measure the success of a design after launch?','descriptive','medium'), q('Describe your approach to designing for mobile-first experiences','descriptive','medium'), q('How do you collaborate with developers to ensure design fidelity?','descriptive','medium') ],
   }
 
-  // Determine role category
   const roleLower = jobRole.toLowerCase()
-  let allQuestions = questionsByRole['fullstack'] // default
+  const roleMap = [
+    { keys: ['computer vision','cv engineer','vision engineer','opencv'],                  role: 'computer-vision' },
+    { keys: ['nlp','natural language','text mining','language model'],                     role: 'nlp' },
+    { keys: ['robotics','robot','ros ','autonomous vehicle','drone'],                      role: 'robotics' },
+    { keys: ['ai engineer','ml engineer','machine learning engineer','deep learning'],     role: 'ai-ml' },
+    { keys: ['cybersecurity','security analyst','penetration','infosec','soc'],            role: 'cybersecurity' },
+    { keys: ['cloud engineer','cloud architect','aws engineer','azure engineer'],          role: 'cloud' },
+    { keys: ['sdet','automation engineer','test engineer'],                                role: 'sdet' },
+    { keys: ['software tester','quality assurance','manual tester','qa engineer'],        role: 'testing' },
+    { keys: ['game developer','game dev','unity','unreal','gaming'],                       role: 'game-dev' },
+    { keys: ['mobile','android','ios','react native','flutter','swift','kotlin'],          role: 'mobile' },
+    { keys: ['system design','distributed systems','solutions architect'],                 role: 'system-design' },
+    { keys: ['embedded','firmware','rtos','microcontroller','iot'],                        role: 'embedded' },
+    { keys: ['business intelligence','bi developer','data analyst','tableau','power bi'],  role: 'bi' },
+    { keys: ['blockchain','solidity','smart contract','web3','defi'],                      role: 'blockchain' },
+    { keys: ['ui/ux','ux designer','ui designer','product designer','figma'],              role: 'uiux' },
+    { keys: ['frontend','front-end','react','vue','angular','css','html'],                 role: 'frontend' },
+    { keys: ['backend','back-end','node','django','spring','laravel','java'],              role: 'backend' },
+    { keys: ['devops','kubernetes','docker','ci/cd','infrastructure'],                     role: 'devops' },
+    { keys: ['data science','data engineer','pandas','spark','etl','ai','ml'],             role: 'data-science' },
+    { keys: ['fullstack','full stack','full-stack','mern','mean'],                         role: 'fullstack' },
+  ]
 
-  if (roleLower.includes('frontend') || roleLower.includes('react') || roleLower.includes('vue')) {
-    allQuestions = questionsByRole['frontend']
-  } else if (roleLower.includes('backend') || roleLower.includes('node') || roleLower.includes('python')) {
-    allQuestions = questionsByRole['backend']
-  } else if (roleLower.includes('devops') || roleLower.includes('kubernetes') || roleLower.includes('docker')) {
-    allQuestions = questionsByRole['devops']
-  } else if (roleLower.includes('data') || roleLower.includes('ml') || roleLower.includes('ai')) {
-    allQuestions = questionsByRole['data-science']
+  let selectedRole = 'fullstack'
+  for (const { keys, role } of roleMap) {
+    if (keys.some(k => roleLower.includes(k))) { selectedRole = role; break }
   }
 
-  // Shuffle questions and select 10 random ones for variety
-  const shuffled = allQuestions.sort(() => Math.random() - 0.5)
-  const selected = shuffled.slice(0, 10)
-
-  console.log(`Selected ${selected.length} varied fallback questions for ${jobRole}`)
+  const all = bank[selectedRole] || bank['fullstack']
+  const selected = [...all].sort(() => Math.random() - 0.5).slice(0, 10)
+  console.log(`Fallback: "${jobRole}" → "${selectedRole}" (${selected.length} questions)`)
   return selected
 }
 
@@ -272,7 +286,6 @@ export async function evaluateAnswer({ question, answer, questionType }) {
     }
 
     console.log('🔄 Attempting to evaluate with Gemini API...')
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     const prompt = `You are an expert technical interviewer evaluating a candidate's answer to a technical question.
 
@@ -317,8 +330,9 @@ Return the response as a JSON object with this format:
 
 Only return the JSON object, no other text.`
 
-    const result = await model.generateContent(prompt)
-    const responseText = result.response.text()
+    const result = await generateWithFallback(prompt)
+    const responseText = result
+    if (!responseText) return generateFallbackEvaluation(answer, question)
 
     console.log('✅ Gemini API response received')
     console.log('Response preview:', responseText.substring(0, 100) + '...')

@@ -2,8 +2,10 @@ import express from 'express'
 import Candidate from '../models/Candidate.js'
 import User from '../models/User.js'
 import JobPosting from '../models/JobPosting.js'
+import CandidateProfile from '../models/CandidateProfile.js'
 import { authenticate } from '../middleware/auth.js'
 import matchingService from '../services/matchingService.js'
+import { autoUpdateOnApplication } from '../services/statusService.js'
 import multer from 'multer'
 import { extractTextFromFile } from '../utils/fileParser.js'
 
@@ -26,9 +28,7 @@ router.post('/apply', authenticate, upload.single('resume'), async (req, res) =>
       return res.status(400).json({ error: 'Notice period is required' })
     }
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'Resume file is required' })
-    }
+    // File is optional — profile can be used as fallback
 
     const existingApplication = await Candidate.findOne({
       userId: req.userId,
@@ -45,20 +45,34 @@ router.post('/apply', authenticate, upload.single('resume'), async (req, res) =>
       return res.status(404).json({ error: 'Job not found' })
     }
 
-    // Extract text from resume file
-    const resumeText = await extractTextFromFile(req.file.buffer, req.file.mimetype)
-    console.log('Resume extracted:', { length: resumeText?.length, mimeType: req.file.mimetype })
-    
-    const resumeUrl = `resume_${Date.now()}_${req.file.originalname}`
+    // Extract text — from uploaded file OR saved profile
+    let resumeText = ''
+    let resumeUrl = ''
 
-    // Calculate match score using matching service
+    if (req.file) {
+      resumeText = await extractTextFromFile(req.file.buffer, req.file.mimetype)
+      resumeUrl = `resume_${Date.now()}_${req.file.originalname}`
+      console.log('Resume extracted from file:', { length: resumeText?.length })
+    } else {
+      // Fall back to saved profile
+      const profile = await CandidateProfile.findOne({ userId: req.userId })
+      if (!profile || !profile.generatedResumeText) {
+        return res.status(400).json({ error: 'Please upload a resume or complete your profile first' })
+      }
+      resumeText = profile.generatedResumeText
+      resumeUrl = 'profile_generated'
+      console.log('Resume text from saved profile:', { length: resumeText?.length })
+    }
+
+    // Calculate match score using AI-powered matching service
     const matchResult = await matchingService.matchResumeToJob(
       resumeText || '',
       job.description || '',
-      job.requiredSkills || []
+      job.requiredSkills || [],
+      job   // pass full job object for AI evaluation
     )
 
-    console.log('Match result:', matchResult)
+    console.log('Match result — source:', matchResult.source, '| score:', matchResult.matchScore)
 
     const candidate = new Candidate({
       userId: req.userId,
@@ -69,15 +83,24 @@ router.post('/apply', authenticate, upload.single('resume'), async (req, res) =>
       noticePeriod: availability === 'notice_period' ? noticePeriod : null,
       matchScore: matchResult.matchScore,
       skillMatchScore: matchResult.skillMatchScore,
-      semanticSimilarity: matchResult.semanticSimilarity,
       experienceMatch: matchResult.experienceMatch,
       educationMatch: matchResult.educationMatch,
       projectRelevance: matchResult.projectRelevance,
       extractedSkills: matchResult.extractedSkills,
+      matchedSkills: matchResult.matchedSkills,
+      missingSkills: matchResult.missingSkills,
+      overallAssessment: matchResult.overallAssessment,
+      strengths: matchResult.strengths,
+      concerns: matchResult.concerns,
+      matchSource: matchResult.source,
+      parsedResume: matchResult.parsedResume || undefined,
       status: 'applied'
     })
     
     await candidate.save()
+
+    // Auto status: applied → screening if matchScore >= 70
+    await autoUpdateOnApplication(candidate._id, matchResult.matchScore)
 
     // Rank candidates for this job
     await matchingService.rankCandidatesForJob(jobId)
@@ -137,15 +160,37 @@ router.get('/job/:jobId/ranked', authenticate, async (req, res) => {
 router.put('/:candidateId', authenticate, async (req, res) => {
   try {
     const { interviewScore, feedback, status } = req.body
+    
+    // Get current candidate to check if they have an interview score
+    const currentCandidate = await Candidate.findById(req.params.candidateId)
+    if (!currentCandidate) {
+      return res.status(404).json({ error: 'Candidate not found' })
+    }
+
+    // Prevent recruiter from overriding auto-determined status based on interview score
+    if (currentCandidate.interviewScore != null && status && status !== currentCandidate.status) {
+      return res.status(403).json({ 
+        error: 'Cannot override status for candidates with completed interviews. Status is automatically determined by interview score.',
+        currentStatus: currentCandidate.status,
+        interviewScore: currentCandidate.interviewScore
+      })
+    }
+
+    const updateData = { feedback }
+    
+    // Only allow status update if no interview score exists
+    if (status && currentCandidate.interviewScore == null) {
+      updateData.status = status
+      updateData.statusUpdatedAt = new Date()
+      updateData.statusNote = 'Manually updated by recruiter'
+    }
+
     const candidate = await Candidate.findByIdAndUpdate(
       req.params.candidateId,
-      { interviewScore, feedback, status },
+      updateData,
       { new: true }
     ).populate('userId').populate('jobId')
     
-    if (!candidate) {
-      return res.status(404).json({ error: 'Candidate not found' })
-    }
     res.json(candidate)
   } catch (error) {
     res.status(500).json({ error: 'Failed to update candidate' })

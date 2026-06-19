@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import RadarChart from '../components/RadarChart'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function CandidateDashboard() {
   const navigate = useNavigate()
@@ -23,6 +25,7 @@ export default function CandidateDashboard() {
   const [bestJobs, setBestJobs] = useState([])
   const [pendingInterviews, setPendingInterviews] = useState([])
   const [completedInterviews, setCompletedInterviews] = useState([])
+  const [savedProfile, setSavedProfile] = useState(null)
 
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
@@ -32,10 +35,29 @@ export default function CandidateDashboard() {
       navigate('/candidate-login')
       return
     }
+
+    // Auto-redirect on expired/invalid token
+    const interceptor = axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401) {
+          localStorage.clear()
+          navigate('/candidate-login')
+        }
+        return Promise.reject(err)
+      }
+    )
+
     fetchCandidateData()
     fetchJobs()
     fetchApplications()
     fetchAIInterviews()
+    // Load saved profile for apply-without-upload feature
+    axios.get('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (r.data.skills?.length > 0) setSavedProfile(r.data) })
+      .catch(() => {})
+
+    return () => axios.interceptors.response.eject(interceptor)
   }, [token, navigate])
 
   const fetchCandidateData = async () => {
@@ -111,8 +133,15 @@ export default function CandidateDashboard() {
 
       setAnalysisResult(response.data)
     } catch (error) {
-      console.error('Failed to analyze resume:', error)
-      alert('Failed to analyze resume: ' + error.response?.data?.error)
+      const status = error.response?.status
+      if (status === 401) {
+        alert('Your session has expired. Please log in again.')
+        localStorage.clear()
+        navigate('/candidate-login')
+      } else {
+        console.error('Failed to analyze resume:', error)
+        alert('Failed to analyze resume: ' + (error.response?.data?.error || error.message))
+      }
     } finally {
       setAnalyzing(false)
     }
@@ -148,8 +177,8 @@ export default function CandidateDashboard() {
   const handleApplicationSubmit = async (e) => {
     e.preventDefault()
 
-    if (!resumeFile) {
-      alert('Please upload a resume')
+    if (!resumeFile && !savedProfile) {
+      alert('Please upload a resume or complete your profile')
       return
     }
 
@@ -219,13 +248,13 @@ export default function CandidateDashboard() {
 
   const getStatusColor = (status) => {
     const colors = {
-      applied: 'bg-blue-100 text-blue-800',
-      screening: 'bg-yellow-100 text-yellow-800',
-      interviewed: 'bg-purple-100 text-purple-800',
-      rejected: 'bg-red-100 text-red-800',
-      hired: 'bg-green-100 text-green-800'
+      applied:    'bg-slate-700 text-slate-300',
+      screening:  'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+      interviewed:'bg-violet-500/20 text-violet-300 border border-violet-500/30',
+      rejected:   'bg-red-500/20 text-red-300 border border-red-500/30',
+      hired:      'bg-green-500/20 text-green-300 border border-green-500/30'
     }
-    return colors[status] || 'bg-gray-100 text-gray-800'
+    return colors[status] || 'bg-slate-700 text-slate-300'
   }
 
   const getScoreColor = (score) => {
@@ -257,28 +286,57 @@ export default function CandidateDashboard() {
             </h1>
             <p className="text-gray-400 text-sm">Candidate Dashboard</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500 rounded-lg hover:bg-red-500/30 transition"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle compact />
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500 rounded-lg hover:bg-red-500/30 transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Profile Card */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-8">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white mb-2">Welcome back!</h2>
-              <p className="text-gray-400">Email: {localStorage.getItem('email')}</p>
+              <h2 className="text-2xl font-bold text-white mb-1">Welcome back!</h2>
+              <p className="text-gray-400 text-sm">Email: {localStorage.getItem('email')}</p>
             </div>
             <div className="text-right">
               <p className="text-gray-400 text-sm">Applications</p>
               <p className="text-3xl font-bold text-blue-400">{applications.length}</p>
             </div>
           </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <button
+            onClick={() => navigate('/profile')}
+            className="group flex items-center gap-3 p-4 bg-slate-800 border border-slate-700 hover:border-blue-500/50 rounded-xl transition text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-xl group-hover:bg-blue-500/30 transition">👤</div>
+            <div>
+              <p className="text-white font-semibold text-sm">My Profile</p>
+              <p className="text-slate-400 text-xs">Build persistent profile</p>
+            </div>
+            <span className="ml-auto text-slate-600 group-hover:text-blue-400 transition">→</span>
+          </button>
+          <button
+            onClick={() => navigate('/job-recommendations')}
+            className="group flex items-center gap-3 p-4 bg-slate-800 border border-slate-700 hover:border-violet-500/50 rounded-xl transition text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-violet-500/20 flex items-center justify-center text-xl group-hover:bg-violet-500/30 transition">🔍</div>
+            <div>
+              <p className="text-white font-semibold text-sm">Job Recommendations</p>
+              <p className="text-slate-400 text-xs">AI-matched jobs for you</p>
+            </div>
+            <span className="ml-auto text-slate-600 group-hover:text-violet-400 transition">→</span>
+          </button>
         </div>
 
         {/* Tabs */}
@@ -393,7 +451,7 @@ export default function CandidateDashboard() {
                         <h3 className="text-xl font-bold text-white">{app.jobId?.title || 'Job'}</h3>
                         <p className="text-gray-400 text-sm mt-1">{app.jobId?.description?.substring(0, 100)}...</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-start">
                         <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(app.status)}`}>
                           {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                         </span>
@@ -406,23 +464,94 @@ export default function CandidateDashboard() {
                       </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    {/* Status Pipeline */}
+                    <div className="mb-5">
+                      <div className="flex items-center gap-0">
+                        {['applied', 'screening', 'interviewed', 'hired'].map((stage, i, arr) => {
+                          const stages = ['applied', 'screening', 'interviewed', 'hired', 'rejected']
+                          const currentIdx = stages.indexOf(app.status)
+                          const stageIdx = ['applied', 'screening', 'interviewed', 'hired'].indexOf(stage)
+                          const isRejected = app.status === 'rejected'
+                          const isDone = isRejected ? false : currentIdx >= stages.indexOf(stage)
+                          const isCurrent = app.status === stage
+                          const stageIcons = { applied: '📝', screening: '🔍', interviewed: '🤖', hired: '✅' }
+                          return (
+                            <div key={stage} className="flex items-center flex-1">
+                              <div className="flex flex-col items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                                  isRejected && stage === 'interviewed' ? 'bg-red-500/20 border-2 border-red-500 text-red-400' :
+                                  isCurrent ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.5)]' :
+                                  isDone ? 'bg-green-500/20 border-2 border-green-500 text-green-400' :
+                                  'bg-slate-700 border-2 border-slate-600 text-slate-500'
+                                }`}>
+                                  {stageIcons[stage]}
+                                </div>
+                                <span className={`text-xs mt-1 font-medium capitalize ${
+                                  isCurrent ? 'text-blue-400' : isDone ? 'text-green-400' : 'text-slate-500'
+                                }`}>{stage}</span>
+                              </div>
+                              {i < arr.length - 1 && (
+                                <div className={`flex-1 h-0.5 mx-1 mb-4 ${
+                                  isDone && !isCurrent ? 'bg-green-500/50' : 'bg-slate-700'
+                                }`} />
+                              )}
+                            </div>
+                          )
+                        })}
+                        {app.status === 'rejected' && (
+                          <div className="flex flex-col items-center ml-2">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs bg-red-500/20 border-2 border-red-500 text-red-400">❌</div>
+                            <span className="text-xs mt-1 font-medium text-red-400">Rejected</span>
+                          </div>
+                        )}
+                      </div>
+                      {app.statusNote && (
+                        <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                          <span>🤖</span> {app.statusNote}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-4 mb-4">
                       <div>
                         <p className="text-gray-500 text-sm">Match Score</p>
                         <p className={`text-2xl font-bold ${getScoreColor(app.matchScore)}`}>{app.matchScore || 0}%</p>
                       </div>
+                      {app.interviewScore != null && (
+                        <div>
+                          <p className="text-gray-500 text-sm">Interview Score</p>
+                          <p className={`text-2xl font-bold ${getScoreColor(app.interviewScore)}`}>{app.interviewScore}%</p>
+                        </div>
+                      )}
+                      {app.combinedScore != null && app.interviewScore != null && (
+                        <div>
+                          <p className="text-gray-500 text-sm">Combined Score</p>
+                          <p className={`text-2xl font-bold ${getScoreColor(app.combinedScore)}`}>{app.combinedScore}%</p>
+                          <p className="text-xs text-gray-400 mt-1">40% Resume + 60% Interview</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-500 text-sm">Applied On</p>
                         <p className="text-white">{new Date(app.appliedAt).toLocaleDateString()}</p>
                       </div>
                     </div>
 
-                    {app.interviewScore && (
-                      <div className="grid md:grid-cols-1 gap-4 mb-4">
-                        <div>
-                          <p className="text-gray-500 text-sm">Interview Score</p>
-                          <p className="text-2xl font-bold text-green-400">{app.interviewScore}%</p>
-                        </div>
+                    {/* Radar chart — only when AI sub-scores exist */}
+                    {app.matchSource === 'ai' && (app.skillMatchScore > 0 || app.experienceMatch > 0) && (
+                      <div className="bg-slate-700/40 rounded-xl p-4 mb-4 border border-slate-600/40">
+                        <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3 flex items-center gap-1">
+                          <span>🤖</span> AI Score Breakdown
+                        </p>
+                        <RadarChart
+                          scores={{
+                            matchScore: app.matchScore,
+                            skillMatchScore: app.skillMatchScore,
+                            experienceMatch: app.experienceMatch,
+                            educationMatch: app.educationMatch,
+                            projectRelevance: app.projectRelevance,
+                          }}
+                          size={200}
+                        />
                       </div>
                     )}
 
@@ -562,49 +691,156 @@ export default function CandidateDashboard() {
               {/* Resume Upload */}
               <div>
                 <label className="block text-gray-300 font-medium mb-2">Upload Resume *</label>
+
+                {/* Use saved profile option */}
+                {savedProfile && (
+                  <div className="mb-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400">👤</span>
+                      <div>
+                        <p className="text-blue-300 text-sm font-semibold">Saved Profile Available</p>
+                        <p className="text-slate-400 text-xs">{savedProfile.skills?.length} skills · {savedProfile.experience?.length} positions</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setAnalyzing(true)
+                        try {
+                          const r = await axios.post(`/api/profile/match-job/${selectedJobForApplication._id}`, {}, {
+                            headers: { Authorization: `Bearer ${token}` }
+                          })
+                          setAnalysisResult(r.data)
+                          setResumeFile(null) // signal: use profile
+                        } catch (e) {
+                          alert('Failed to analyze: ' + (e.response?.data?.error || e.message))
+                        } finally {
+                          setAnalyzing(false)
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg font-semibold transition"
+                    >
+                      Use Profile
+                    </button>
+                  </div>
+                )}
+
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx,.txt"
                   onChange={handleResumeUpload}
-                  required
                   className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {resumeFile && <p className="text-gray-400 text-sm mt-1">Selected: {resumeFile.name}</p>}
+                {!resumeFile && analysisResult && savedProfile && (
+                  <p className="text-blue-400 text-xs mt-1">✓ Using saved profile</p>
+                )}
               </div>
 
               {/* Analysis Results */}
               {analyzing && (
-                <div className="bg-slate-700 p-4 rounded-lg">
-                  <p className="text-gray-300">Analyzing your resume...</p>
+                <div className="bg-slate-700 p-4 rounded-lg flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-violet-400 flex-shrink-0"></div>
+                  <div>
+                    <p className="text-white text-sm font-medium">AI is analyzing your resume...</p>
+                    <p className="text-gray-400 text-xs mt-0.5">Gemini is parsing skills, experience, and matching against the job</p>
+                  </div>
                 </div>
               )}
 
               {analysisResult && (
                 <div className="bg-slate-700 p-4 rounded-lg space-y-4">
+
+                  {/* AI badge */}
+                  {analysisResult.source === 'ai' && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/15 border border-violet-500/30 rounded-lg w-fit">
+                      <span className="text-sm">🤖</span>
+                      <span className="text-violet-300 text-xs font-semibold">AI-Powered Analysis</span>
+                    </div>
+                  )}
+
+                  {/* Overall match score */}
                   <div>
-                    <p className="text-gray-400 text-sm mb-2">Match Score</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-600 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            analysisResult.matchScore >= 70 ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${analysisResult.matchScore}%` }}
-                        ></div>
-                      </div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-gray-400 text-sm">Overall Match</p>
                       <p className={`text-lg font-bold ${getScoreColor(analysisResult.matchScore)}`}>
                         {analysisResult.matchScore}%
                       </p>
                     </div>
+                    <div className="w-full bg-slate-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-700 ${
+                          analysisResult.matchScore >= 70 ? 'bg-green-500' : analysisResult.matchScore >= 60 ? 'bg-blue-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${analysisResult.matchScore}%` }}
+                      />
+                    </div>
                   </div>
 
-                  {/* Matched Skills */}
-                  {analysisResult.matchedSkills.length > 0 && (
+                  {/* Sub-scores (AI only) */}
+                  {analysisResult.source === 'ai' && (
+                    <>
+                      {/* Radar chart */}
+                      <div className="flex justify-center py-2">
+                        <RadarChart scores={analysisResult} size={200} />
+                      </div>
+
+                      {/* Sub-score bars */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: 'Skills',     value: analysisResult.skillMatchScore },
+                          { label: 'Experience', value: analysisResult.experienceMatch },
+                          { label: 'Education',  value: analysisResult.educationMatch },
+                          { label: 'Projects',   value: analysisResult.projectRelevance },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="bg-slate-600/60 rounded-lg p-2">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-400">{label}</span>
+                              <span className={`font-bold ${getScoreColor(value)}`}>{value}%</span>
+                            </div>
+                            <div className="w-full bg-slate-500 rounded-full h-1">
+                              <div
+                                className={`h-1 rounded-full ${value >= 70 ? 'bg-green-500' : value >= 50 ? 'bg-blue-500' : 'bg-red-500'}`}
+                                style={{ width: `${value}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* AI overall assessment */}
+                  {analysisResult.overallAssessment && (
+                    <div className="bg-slate-600/50 rounded-lg p-3 border-l-2 border-blue-500">
+                      <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-1">AI Assessment</p>
+                      <p className="text-gray-200 text-sm leading-relaxed">{analysisResult.overallAssessment}</p>
+                    </div>
+                  )}
+
+                  {/* Strengths */}
+                  {analysisResult.strengths?.length > 0 && (
                     <div>
-                      <p className="text-green-400 font-semibold mb-2">✓ Matched Skills ({analysisResult.matchedSkills.length})</p>
-                      <div className="flex flex-wrap gap-2">
+                      <p className="text-green-400 text-xs font-semibold uppercase tracking-wider mb-2">Strengths</p>
+                      <ul className="space-y-1">
+                        {analysisResult.strengths.map((s, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                            <span className="text-green-400 mt-0.5">✓</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Matched Skills */}
+                  {analysisResult.matchedSkills?.length > 0 && (
+                    <div>
+                      <p className="text-green-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                        Matched Skills ({analysisResult.matchedSkills.length})
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
                         {analysisResult.matchedSkills.map((skill, idx) => (
-                          <span key={idx} className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded">
+                          <span key={idx} className="px-2 py-0.5 bg-green-500/20 text-green-300 text-xs rounded-full border border-green-500/20">
                             {skill}
                           </span>
                         ))}
@@ -613,46 +849,55 @@ export default function CandidateDashboard() {
                   )}
 
                   {/* Skill Gaps */}
-                  {analysisResult.missingSkills.length > 0 && (
+                  {analysisResult.missingSkills?.length > 0 && (
                     <div>
-                      <p className="text-red-400 font-semibold mb-2">✗ Skill Gaps ({analysisResult.missingSkills.length})</p>
+                      <p className="text-red-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                        Skill Gaps ({analysisResult.missingSkills.length})
+                      </p>
                       <div className="space-y-2">
                         {analysisResult.skillGapSuggestions.map((gap, idx) => (
-                          <div key={idx} className="bg-slate-600 p-2 rounded text-sm">
-                            <p className="text-red-300 font-semibold">{gap.skill}</p>
-                            <p className="text-gray-300">{gap.suggestion}</p>
-                            <p className="text-gray-400 text-xs mt-1">{gap.resources}</p>
+                          <div key={idx} className="bg-slate-600/60 p-2.5 rounded-lg text-sm border border-red-500/10">
+                            <p className="text-red-300 font-semibold text-xs">{gap.skill}</p>
+                            <p className="text-gray-300 text-xs mt-0.5">{gap.suggestion}</p>
+                            <p className="text-gray-500 text-xs mt-0.5">{gap.resources}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Score Warning */}
-                  {analysisResult.matchScore < 60 && (
-                    <div className="bg-red-500/20 border border-red-500 p-3 rounded">
-                      <p className="text-red-300 font-semibold">⚠️ Score Below 60%</p>
-                      <p className="text-red-200 text-sm mt-1">
-                        Your match score is below 60%. Please improve the skills mentioned above to increase your chances.
-                      </p>
+                  {/* Concerns */}
+                  {analysisResult.concerns?.length > 0 && (
+                    <div>
+                      <p className="text-yellow-400 text-xs font-semibold uppercase tracking-wider mb-2">Areas to Address</p>
+                      <ul className="space-y-1">
+                        {analysisResult.concerns.map((c, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                            <span className="text-yellow-400 mt-0.5">⚠</span>{c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Score gate */}
+                  {analysisResult.matchScore < 60 ? (
+                    <div className="bg-red-500/15 border border-red-500/30 p-3 rounded-lg">
+                      <p className="text-red-300 font-semibold text-sm">Score Below 60% — Cannot Apply</p>
+                      <p className="text-red-200 text-xs mt-1">Improve the skills listed above to qualify for this role.</p>
                       <button
                         type="button"
                         onClick={handleFindBestJobs}
                         disabled={analyzing}
-                        className="mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition"
+                        className="mt-2 px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition"
                       >
                         {analyzing ? 'Finding jobs...' : 'Find Better Matching Jobs'}
                       </button>
                     </div>
-                  )}
-
-                  {/* Success Message */}
-                  {analysisResult.matchScore >= 60 && (
-                    <div className="bg-green-500/20 border border-green-500 p-3 rounded">
-                      <p className="text-green-300 font-semibold">✓ Great Match!</p>
-                      <p className="text-green-200 text-sm mt-1">
-                        Your resume matches this job well. You can proceed with your application.
-                      </p>
+                  ) : (
+                    <div className="bg-green-500/15 border border-green-500/30 p-3 rounded-lg">
+                      <p className="text-green-300 font-semibold text-sm">✓ Great Match — Ready to Apply</p>
+                      <p className="text-green-200 text-xs mt-1">Your profile aligns well with this role.</p>
                     </div>
                   )}
                 </div>

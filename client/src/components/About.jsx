@@ -1,332 +1,192 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
-const problems = [
+const timeline = [
   {
-    title: 'Manual Resume Screening',
-    description: 'HR teams spend countless hours manually reviewing resumes, leading to fatigue and missed talent.',
-    icon: '📋',
-    color: 'from-red-500 to-red-600'
-  },
-  {
-    title: 'Repetitive Interviews',
-    description: 'Scheduling and conducting multiple rounds of interviews is time-consuming and resource-intensive.',
-    icon: '⏰',
-    color: 'from-orange-500 to-orange-600'
-  },
-  {
-    title: 'Biased Decision-Making',
-    description: 'Subjective evaluations lead to unconscious bias, resulting in unfair hiring outcomes.',
+    phase: 'The Problem',
+    title: 'Broken Hiring Systems',
+    description: 'HR teams spend countless hours manually reviewing resumes, conducting repetitive interviews, and making subjective decisions prone to bias. Top talent is lost while processes drag on for weeks.',
     icon: '⚠️',
-    color: 'from-yellow-500 to-yellow-600'
-  }
-]
-
-const solutions = [
+    color: 'from-red-500 to-orange-500',
+    border: 'border-red-500/30',
+    bg: 'bg-red-500/5',
+    items: ['Manual resume screening', 'Repetitive interviews', 'Biased decision-making', 'Weeks-long hiring cycles']
+  },
   {
-    title: 'AI-Powered Analysis',
-    description: 'Intelligent algorithms analyze resumes and extract relevant information automatically.',
+    phase: 'The Solution',
+    title: 'HireLens AI Platform',
+    description: 'We built an intelligent recruitment platform that automates the entire hiring pipeline — from resume parsing to AI interviews — delivering objective, data-driven hiring decisions at scale.',
     icon: '🤖',
-    color: 'from-blue-500 to-blue-600'
+    color: 'from-blue-500 to-violet-500',
+    border: 'border-blue-500/30',
+    bg: 'bg-blue-500/5',
+    items: ['AI-powered resume analysis', 'Autonomous 24/7 interviews', 'Objective skill scoring', 'Instant candidate ranking']
   },
   {
-    title: 'Automated Interviews',
-    description: 'Autonomous AI conducts screening interviews 24/7, eliminating scheduling constraints.',
-    icon: '💬',
-    color: 'from-purple-500 to-purple-600'
-  },
-  {
-    title: 'Objective Evaluation',
-    description: 'Data-driven scoring ensures fair, unbiased assessment of all candidates.',
-    icon: '✓',
-    color: 'from-green-500 to-green-600'
+    phase: 'The Impact',
+    title: 'Transforming Recruitment',
+    description: 'Organizations using HireLens hire 70% faster, with 95% accuracy and zero bias. HR teams reclaim their time to focus on what matters — building great teams.',
+    icon: '🚀',
+    color: 'from-emerald-500 to-cyan-500',
+    border: 'border-emerald-500/30',
+    bg: 'bg-emerald-500/5',
+    items: ['70% faster hiring cycles', '95% match accuracy', '100% bias-free evaluation', '80% reduction in manual work']
   }
 ]
 
 const values = [
-  {
-    title: 'Intelligence',
-    description: 'Leveraging cutting-edge AI to make smarter hiring decisions',
-    icon: '🧠'
-  },
-  {
-    title: 'Fairness',
-    description: 'Ensuring unbiased and equitable evaluation for all candidates',
-    icon: '⚖️'
-  },
-  {
-    title: 'Efficiency',
-    description: 'Streamlining recruitment to save time and resources',
-    icon: '⚡'
-  },
-  {
-    title: 'Innovation',
-    description: 'Continuously advancing recruitment technology',
-    icon: '🚀'
-  }
+  { title: 'Intelligence', description: 'Leveraging cutting-edge AI to make smarter hiring decisions', icon: '🧠', color: 'from-blue-500 to-cyan-500' },
+  { title: 'Fairness', description: 'Ensuring unbiased and equitable evaluation for all candidates', icon: '⚖️', color: 'from-violet-500 to-purple-500' },
+  { title: 'Efficiency', description: 'Streamlining recruitment to save time and resources', icon: '⚡', color: 'from-amber-500 to-orange-500' },
+  { title: 'Innovation', description: 'Continuously advancing recruitment technology', icon: '🚀', color: 'from-emerald-500 to-teal-500' },
 ]
 
 export default function About() {
   const [isVisible, setIsVisible] = useState(false)
   const [activeTab, setActiveTab] = useState('mission')
+  const ref = useRef(null)
 
   useEffect(() => {
-    setIsVisible(true)
+    const observer = new IntersectionObserver(([e]) => { if (e.isIntersecting) setIsVisible(true) }, { threshold: 0.1 })
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
   }, [])
 
   return (
-    <section id="about" className="py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
-      {/* Background decoration */}
-      <div className="absolute top-0 left-0 w-96 h-96 bg-primary opacity-5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-secondary opacity-5 rounded-full blur-3xl translate-x-1/2 translate-y-1/2"></div>
+    <section id="about" ref={ref} className="py-28 bg-[#060B18] relative overflow-hidden">
+      <div className="absolute inset-0 grid-bg opacity-30"></div>
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-violet-600/8 rounded-full blur-[100px]"></div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Section Header */}
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center space-x-2 bg-green-100 text-green-600 px-4 py-2 rounded-full mb-6">
-            <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
-            <span className="text-sm font-semibold">Our Story</span>
+        {/* Header */}
+        <div className="text-center mb-16">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 mb-6">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+            <span className="text-emerald-400 text-sm font-medium">Our Story</span>
           </div>
-          <h2 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-5">
             About HireLens
-            <span className="block bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-blue-400 to-violet-400 mt-1">
               Transforming Recruitment
             </span>
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            We're on a mission to revolutionize how organizations hire by combining artificial intelligence 
-            with intelligent recruitment workflows.
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+            We're on a mission to revolutionize how organizations hire by combining artificial intelligence with intelligent recruitment workflows.
           </p>
         </div>
 
-        {/* Mission Statement */}
-        <div className={`mb-20 p-12 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-3xl border-2 border-primary/20 transition-all duration-500 ${
-          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-        }`}>
-          <div className="max-w-4xl mx-auto">
-            <h3 className="text-3xl font-bold text-gray-900 mb-6 text-center">Our Mission</h3>
-            <p className="text-xl text-gray-700 leading-relaxed text-center mb-8">
-              To build a smarter, fairer, and more efficient hiring ecosystem for modern organizations by 
-              combining artificial intelligence with intelligent recruitment workflows.
+        {/* Mission Card */}
+        <div className={`mb-16 relative rounded-2xl overflow-hidden transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-violet-600/10 to-cyan-600/10"></div>
+          <div className="absolute inset-0 border border-white/10 rounded-2xl"></div>
+          <div className="relative p-10 md:p-14">
+            <h3 className="text-2xl font-bold text-white mb-4 text-center">Our Mission</h3>
+            <p className="text-slate-300 text-lg leading-relaxed text-center max-w-3xl mx-auto mb-10">
+              To build a smarter, fairer, and more efficient hiring ecosystem for modern organizations by combining artificial intelligence with intelligent recruitment workflows.
             </p>
             <div className="grid md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-4xl mb-3">🎯</div>
-                <h4 className="font-bold text-gray-900 mb-2">Smarter Hiring</h4>
-                <p className="text-gray-600">Data-driven decisions powered by advanced AI</p>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl mb-3">⚖️</div>
-                <h4 className="font-bold text-gray-900 mb-2">Fair Evaluation</h4>
-                <p className="text-gray-600">Objective assessment free from bias</p>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl mb-3">⚡</div>
-                <h4 className="font-bold text-gray-900 mb-2">Efficient Process</h4>
-                <p className="text-gray-600">Faster hiring cycles and better outcomes</p>
-              </div>
+              {[
+                { icon: '🎯', title: 'Smarter Hiring', desc: 'Data-driven decisions powered by advanced AI' },
+                { icon: '⚖️', title: 'Fair Evaluation', desc: 'Objective assessment free from bias' },
+                { icon: '⚡', title: 'Efficient Process', desc: 'Faster hiring cycles and better outcomes' },
+              ].map((item, i) => (
+                <div key={i} className="text-center p-6 rounded-xl bg-white/4 border border-white/8 hover:bg-white/6 hover:border-white/15 transition-all duration-300">
+                  <div className="text-3xl mb-3">{item.icon}</div>
+                  <div className="font-bold text-white mb-1">{item.title}</div>
+                  <div className="text-slate-400 text-sm">{item.desc}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex justify-center gap-4 mb-16">
-          <button
-            onClick={() => setActiveTab('mission')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-              activeTab === 'mission'
-                ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-primary'
-            }`}
-          >
-            The Problem
-          </button>
-          <button
-            onClick={() => setActiveTab('solution')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-              activeTab === 'solution'
-                ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-primary'
-            }`}
-          >
-            Our Solution
-          </button>
-          <button
-            onClick={() => setActiveTab('values')}
-            className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-              activeTab === 'values'
-                ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-primary'
-            }`}
-          >
-            Our Values
-          </button>
+        {/* Tab Nav */}
+        <div className="flex justify-center gap-3 mb-12">
+          {[['mission', 'The Problem'], ['solution', 'Our Solution'], ['values', 'Our Values']].map(([tab, label]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                activeTab === tab
+                  ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)]'
+                  : 'text-slate-400 border border-white/10 bg-white/3 hover:bg-white/6 hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* The Problem */}
-        {activeTab === 'mission' && (
+        {/* Timeline (Problem / Solution / Impact) */}
+        {(activeTab === 'mission' || activeTab === 'solution') && (
           <div className={`transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="mb-12">
-              <h3 className="text-3xl font-bold text-gray-900 mb-12 text-center">
-                The Challenge Organizations Face
-              </h3>
-              <div className="grid md:grid-cols-3 gap-8">
-                {problems.map((problem, index) => (
-                  <div
-                    key={index}
-                    className={`group relative transition-all duration-500 transform ${
-                      isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-                    }`}
-                    style={{ transitionDelay: `${index * 100}ms` }}
-                  >
-                    {/* Card */}
-                    <div className="relative p-8 rounded-2xl bg-white border-2 border-gray-200 group-hover:border-red-500 transition-all duration-500 h-full">
-                      <div className="text-5xl mb-4">{problem.icon}</div>
-                      <h4 className="text-xl font-bold text-gray-900 mb-3">{problem.title}</h4>
-                      <p className="text-gray-600 leading-relaxed">{problem.description}</p>
-                      
-                      {/* Decorative element */}
-                      <div className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-br ${problem.color} opacity-0 group-hover:opacity-10 rounded-full blur-2xl transition-opacity duration-500`}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Problem Impact */}
-            <div className="p-8 bg-red-50 border-2 border-red-200 rounded-2xl">
-              <h4 className="text-2xl font-bold text-red-900 mb-4">The Impact</h4>
-              <ul className="space-y-3 text-red-800">
-                <li className="flex items-start">
-                  <span className="text-red-600 mr-3 font-bold">•</span>
-                  <span>Hiring cycles take weeks or months, delaying critical business needs</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-red-600 mr-3 font-bold">•</span>
-                  <span>Top talent is lost to competitors while evaluations drag on</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-red-600 mr-3 font-bold">•</span>
-                  <span>Biased hiring practices lead to legal and reputational risks</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="text-red-600 mr-3 font-bold">•</span>
-                  <span>HR teams are overwhelmed with repetitive, low-value tasks</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* Our Solution */}
-        {activeTab === 'solution' && (
-          <div className={`transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-            <div className="mb-12">
-              <h3 className="text-3xl font-bold text-gray-900 mb-12 text-center">
-                How HireLens Solves It
-              </h3>
-              <div className="grid md:grid-cols-3 gap-8">
-                {solutions.map((solution, index) => (
-                  <div
-                    key={index}
-                    className={`group relative transition-all duration-500 transform ${
-                      isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-                    }`}
-                    style={{ transitionDelay: `${index * 100}ms` }}
-                  >
-                    {/* Card */}
-                    <div className={`relative p-8 rounded-2xl bg-gradient-to-br ${solution.color} text-white border-2 border-transparent group-hover:border-white/50 transition-all duration-500 h-full shadow-lg group-hover:shadow-2xl`}>
-                      <div className="text-5xl mb-4">{solution.icon}</div>
-                      <h4 className="text-xl font-bold mb-3">{solution.title}</h4>
-                      <p className="text-white/90 leading-relaxed">{solution.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Solution Benefits */}
-            <div className="p-8 bg-green-50 border-2 border-green-200 rounded-2xl">
-              <h4 className="text-2xl font-bold text-green-900 mb-4">The Results</h4>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="flex items-start">
-                  <span className="text-green-600 mr-3 font-bold text-2xl">✓</span>
-                  <div>
-                    <p className="font-bold text-green-900">70% Faster Hiring</p>
-                    <p className="text-green-800">Reduce time-to-hire from weeks to days</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <span className="text-green-600 mr-3 font-bold text-2xl">✓</span>
-                  <div>
-                    <p className="font-bold text-green-900">95% Accuracy</p>
-                    <p className="text-green-800">Data-driven decisions eliminate guesswork</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <span className="text-green-600 mr-3 font-bold text-2xl">✓</span>
-                  <div>
-                    <p className="font-bold text-green-900">100% Fair Evaluation</p>
-                    <p className="text-green-800">Objective assessment free from bias</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <span className="text-green-600 mr-3 font-bold text-2xl">✓</span>
-                  <div>
-                    <p className="font-bold text-green-900">80% Time Saved</p>
-                    <p className="text-green-800">HR teams focus on strategic decisions</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Our Values */}
-        {activeTab === 'values' && (
-          <div className={`transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
-            <h3 className="text-3xl font-bold text-gray-900 mb-12 text-center">
-              Core Values That Drive Us
-            </h3>
-            <div className="grid md:grid-cols-2 gap-8">
-              {values.map((value, index) => (
+            <div className="grid md:grid-cols-3 gap-6">
+              {timeline.map((item, i) => (
                 <div
-                  key={index}
-                  className={`group relative transition-all duration-500 transform ${
-                    isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
-                  }`}
-                  style={{ transitionDelay: `${index * 100}ms` }}
+                  key={i}
+                  className={`relative rounded-2xl border ${item.border} ${item.bg} p-7 transition-all duration-500 hover:-translate-y-1 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+                  style={{ transitionDelay: `${i * 120}ms` }}
                 >
-                  {/* Card */}
-                  <div className="relative p-8 rounded-2xl bg-white border-2 border-gray-200 group-hover:border-primary transition-all duration-500 h-full">
-                    <div className="flex items-start">
-                      <div className="text-5xl mr-6">{value.icon}</div>
-                      <div className="flex-1">
-                        <h4 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-primary transition-colors">
-                          {value.title}
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed">{value.description}</p>
-                      </div>
-                    </div>
+                  {/* Phase badge */}
+                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${item.color} bg-opacity-10 mb-5`}>
+                    <span className="text-sm">{item.icon}</span>
+                    <span className="text-xs font-bold text-white">{item.phase}</span>
                   </div>
+
+                  {/* Step number connector */}
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-xs font-bold text-white">
+                    {i + 1}
+                  </div>
+
+                  <h4 className="text-lg font-bold text-white mb-3">{item.title}</h4>
+                  <p className="text-slate-400 text-sm leading-relaxed mb-5">{item.description}</p>
+
+                  <ul className="space-y-2">
+                    {item.items.map((point, j) => (
+                      <li key={j} className="flex items-center gap-2 text-sm text-slate-300">
+                        <div className={`w-1.5 h-1.5 rounded-full bg-gradient-to-r ${item.color} flex-shrink-0`}></div>
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Vision Statement */}
-        <div className="mt-20 p-12 bg-gradient-to-r from-primary to-secondary rounded-3xl shadow-2xl text-white">
-          <div className="max-w-3xl mx-auto text-center">
-            <h3 className="text-3xl font-bold mb-6">Our Vision for the Future</h3>
-            <p className="text-xl leading-relaxed mb-8">
-              We envision a world where recruitment is intelligent, fair, and efficient. Where AI and human 
-              judgment work together to identify the best talent. Where every candidate receives objective 
-              evaluation regardless of background. Where HR teams focus on building great teams instead of 
-              drowning in administrative tasks.
+        {/* Values */}
+        {activeTab === 'values' && (
+          <div className={`grid md:grid-cols-2 gap-5 transition-all duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+            {values.map((v, i) => (
+              <div
+                key={i}
+                className={`group relative rounded-2xl border border-white/8 bg-white/4 p-7 overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:border-white/15 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+                style={{ transitionDelay: `${i * 100}ms` }}
+              >
+                <div className="flex items-start gap-5">
+                  <div className={`flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br ${v.color} flex items-center justify-center text-xl group-hover:scale-110 transition-transform duration-300`}>
+                    {v.icon}
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white mb-2">{v.title}</h4>
+                    <p className="text-slate-400 text-sm leading-relaxed">{v.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Vision Banner */}
+        <div className="mt-16 relative rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-violet-600 opacity-90"></div>
+          <div className="absolute inset-0 node-bg opacity-20"></div>
+          <div className="relative p-10 md:p-14 text-center">
+            <h3 className="text-2xl font-bold text-white mb-5">Our Vision for the Future</h3>
+            <p className="text-white/85 text-lg leading-relaxed max-w-3xl mx-auto mb-4">
+              We envision a world where recruitment is intelligent, fair, and efficient. Where AI and human judgment work together to identify the best talent. Where every candidate receives objective evaluation regardless of background.
             </p>
-            <p className="text-lg text-white/90">
-              This is the future of recruitment. This is HireLens.
-            </p>
+            <p className="text-white/70 font-semibold">This is the future of recruitment. This is HireLens.</p>
           </div>
         </div>
       </div>
