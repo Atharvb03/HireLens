@@ -19,10 +19,18 @@ import profileRoutes from './routes/profile.js'
 const app = express()
 const httpServer = createServer(app)
 
-// Socket.io setup with CORS
+// Socket.io setup with CORS — origins resolved after allowedOrigins is defined below
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      const allowed = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        process.env.CLIENT_URL,
+      ].filter(Boolean)
+      if (!origin || allowed.includes(origin)) callback(null, true)
+      else callback(new Error(`Socket CORS: origin ${origin} not allowed`))
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -46,7 +54,25 @@ io.on('connection', (socket) => {
   })
 })
 
-app.use(cors())
+// Allow requests from local dev and the deployed Vercel frontend.
+// Set CLIENT_URL in your Render environment variables to your Vercel URL.
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  process.env.CLIENT_URL,        // e.g. https://your-project.vercel.app
+].filter(Boolean)
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow non-browser requests (Postman, server-to-server) and listed origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`))
+    }
+  },
+  credentials: true
+}))
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
