@@ -17,7 +17,7 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     // Connect to Socket.io server
-    const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+    const serverUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : 'https://hirelens-t23q.onrender.com')
     const newSocket = io(serverUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
