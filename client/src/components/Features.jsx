@@ -80,7 +80,7 @@ const features = [
     span: 'lg:col-span-1'
   }
 ]
-
+//fixed bug
 function FeatureCard({ feature, index, isVisible }) {
   const [hovered, setHovered] = useState(false)
 
