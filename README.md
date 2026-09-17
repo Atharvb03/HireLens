@@ -428,4 +428,4 @@ Issues and feature requests are welcome at https://github.com/Atharvb03/HireLens
 
 ## Author
 
-**Atharv Bhagat** — [@Atharvb03](https://github.com/Atharvb03)
+**Atharv Bendkhale** — [@Atharvb03](https://github.com/Atharvb03)
